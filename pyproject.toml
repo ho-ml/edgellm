@@ -1,0 +1,45 @@
+[project]
+name = "edgellm"
+version = "0.1.0"
+description = "W4A8KV4 quantization and efficient serving for Llama models"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "ho-ml" }]
+dependencies = [
+    "torch>=2.2.0",
+    "transformers>=4.40.0",
+    "accelerate>=0.26.0",
+    "datasets>=2.16.0",
+    "lm_eval>=0.4.2",
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "tqdm>=4.66.0",
+    "numpy>=1.26.0",
+    "fastapi>=0.109.0",
+    "uvicorn>=0.27.0",
+    "sentencepiece>=0.1.99",
+    "protobuf>=4.25.0",
+    "loguru>=0.7.3",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["compressor"]
+
+[project.optional-dependencies]
+flash-attn = [
+    "flash-attn>=2.5.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+all = [
+    "edgellm[flash-attn,dev]",
+]

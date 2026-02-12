@@ -1,0 +1,45 @@
+calib:
+  data: "pileval"
+  num_samples: 128
+  seq_length: 1024
+  min_length: 0
+  max_length: 0
+  seed: 42
+
+rotate:
+  enabled: true
+  random: false
+  path: ""
+  rotate_out: true   # qoq: rotation.transforms: [out_proj]
+  rotate_down: false # qoq: no Hadamard hook
+
+reorder:
+  enabled: true
+  path: ""
+  reorder_out: false # qoq: not in reorder.skips
+  reorder_down: true # qoq: not in reorder.skips
+
+smooth:
+  enabled: true
+  path: ""
+  smooth_attn: true  # qoq: smooth.enable_attn: true
+  smooth_qkv: false  # qoq: smooth.proj.skips: [qkv_proj]
+  smooth_vo: false   # qoq: smooth.proj.skips: [out_proj]
+  smooth_ffn: false  # qoq: smooth.proj.skips: [up_proj]
+  smooth_down: true  # qoq: down_proj not in smooth.proj.skips (applied with reorder_down)
+  alpha: 0.5         # qoq: smooth.attn.alpha: 0.5
+
+quant:
+  weight:
+    bits: 4
+    strategy: "group"
+    group_size: 128
+    symmetric: true
+    observer: "memoryless-minmax"
+  activation: null
+  kv_cache: null
+
+weight_quant:
+  method: "gptq"
+  block_size: 128
+  perc_damp: 0.01

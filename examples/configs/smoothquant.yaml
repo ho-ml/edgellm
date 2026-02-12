@@ -1,0 +1,32 @@
+calib:
+  data: "pileval"
+  num_samples: 128
+  seq_length: 512
+  min_length: 0
+  max_length: 0
+  seed: 42
+
+smooth:
+  enabled: true
+  path: ""
+  smooth_attn: true 
+  smooth_qkv: true  
+  smooth_vo: false   
+  smooth_ffn: true  
+  smooth_down: false  
+  alpha: 0.85         
+
+quant:
+  weight:
+    bits: 8
+    strategy: "group"
+    group_size: 128
+    symmetric: true
+    observer: "memoryless-minmax"
+  activation: null
+  kv_cache: null
+
+weight_quant:
+  method: "gptq"
+  block_size: 128
+  perc_damp: 0.01
