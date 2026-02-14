@@ -5,7 +5,7 @@ from compressor.config import CompressorConfig
 from compressor.compress import Compressor
 from compressor.evaluate import evaluate
 
-CONFIG_PATH = "examples/configs/test.yaml"
+CONFIG_PATH = "examples/configs/qoq.yaml"
 MODEL_ID = "meta-llama/Llama-3.2-1B"
 
 # build config
