@@ -257,6 +257,14 @@ class LLMStruct:
         """
         Apply all model patches
         """
+        # patch tie embeddings options to False
+        if self.config and self.config.tie_word_embeddings:
+            if self.lm_head is not None:
+                self.lm_head.weight = nn.Parameter(
+                    self.lm_head.weight.data.clone()
+                )
+            self.config.tie_word_embeddings = False
+
         # patch rope
         if self.config and self.config.with_rope:
             patch_rope(self.model)

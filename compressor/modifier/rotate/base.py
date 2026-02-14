@@ -160,7 +160,6 @@ class RotateModifier(Modifier):
         if (
             model_struct.norm is not None
             and model_struct.lm_head is not None
-            and not model_struct.config.tie_word_embeddings
         ):
             fuse_ln_fcs(model_struct.norm, [model_struct.lm_head])
 
@@ -212,10 +211,7 @@ class RotateModifier(Modifier):
                 hadamard_in(module)
 
         # compensate rotation on lm_head input
-        if (
-            model_struct.lm_head is not None
-            and not model_struct.config.tie_word_embeddings
-        ):
+        if model_struct.lm_head is not None:
             rotate_in(model_struct.lm_head.weight, rotation)
         
     
