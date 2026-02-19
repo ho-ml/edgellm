@@ -1,3 +1,4 @@
+import os
 import yaml
 
 from typing import *
@@ -9,26 +10,29 @@ from compressor.modifier.rotate import RotateConfig, RotateModifier
 from compressor.modifier.smooth import SmoothConfig, SmoothModifier
 from compressor.modifier.reorder import ReorderConfig, ReorderModifier
 from compressor.modifier.weight import WeightQuantConfig, WeightQuantModifier
+from compressor.modifier.activation import ActivationQuantConfig, ActivationQuantModifier
 
 __all__ = ["CompressorConfig"]
-
 
 @dataclass
 class CompressorConfig:
     """
     Configuration for the compression pipeline
     """
-    # Config for calibration
+    # config for calibration
     calib: CalibConfig
 
-    # Config for specific modifiers
+    # config for specific modifiers
+    transform_path: str = ""
     rotate: Optional[RotateConfig] = field(default=None)
     reorder: Optional[ReorderConfig] = field(default=None)
     smooth: Optional[SmoothConfig] = field(default=None)
 
-    # Config for quantization
+    # config for quantization
+    quant_path: str = ""
     quant: Optional[QuantConfig] = field(default=None)
     weight_quant: Optional[WeightQuantConfig] = field(default=None)
+    act_quant: Optional[ActivationQuantConfig] = field(default=None)
 
     def __post_init__(self):
         """
@@ -47,12 +51,30 @@ class CompressorConfig:
             # rotate_out + reorder_out
             if self.rotate.rotate_out and self.reorder.reorder_out:
                 logger.warning("rotate_out and reorder_out are incompatible.")
-                self.reorder.reorder_out = False 
+                self.reorder.reorder_out = False
+
+        # determine paths from the transform_path
+        if self.transform_path:
+            if self.rotate is not None and not self.rotate.path:
+                self.rotate.path = os.path.join(self.transform_path, "rotate")
+            if self.reorder is not None and not self.reorder.path:
+                self.reorder.path = os.path.join(self.transform_path, "reorder")
+            if self.smooth is not None and not self.smooth.path:
+                self.smooth.path = os.path.join(self.transform_path, "smooth")
+
+        # determine paths from the quant_path
+        if self.quant_path:
+            if self.weight_quant is not None and not self.weight_quant.path:
+                self.weight_quant.path = os.path.join(self.quant_path, "weight")
+        
+        # unify `skips` types to list
+        if self.act_quant is not None and isinstance(self.act_quant.skips, str):
+            self.act_quant.skips = [self.act_quant.skips]
 
     def get_modifiers(self):
         """
         Return list of enabled modifiers in pipeline order:
-        rotate -> reorder -> smooth -> weight quant
+        rotate -> reorder -> smooth -> activation quant -> weight quant
         """
         modifiers = []
 
@@ -71,11 +93,16 @@ class CompressorConfig:
             modifier = SmoothModifier(config=self.smooth)
             modifiers.append(modifier)
 
+        # Activation quantization modifier
+        if self.act_quant is not None:
+            modifier = ActivationQuantModifier(config=self.act_quant)
+            modifiers.append(modifier)
+
         # Weight quantization modifier
         if self.weight_quant is not None:
             modifier = WeightQuantModifier(config=self.weight_quant)
             modifiers.append(modifier)
-        
+
         return modifiers
 
     @classmethod
@@ -90,47 +117,71 @@ class CompressorConfig:
         calib_kwargs = config.get("calib", {})
         calib_config = CalibConfig(**calib_kwargs)
 
-        # Rotate config
-        rotate_kwargs = config.get("rotate", None)
-        if rotate_kwargs is not None:
-            rotate_config = RotateConfig(**rotate_kwargs)
-        else:
-            rotate_config = None
+        # Transform config
+        transform_dict = config.get("transform", None)
+        transform_path = ""
+        rotate_config = None
+        reorder_config = None
+        smooth_config = None
 
-        # Reorder config
-        reorder_kwargs = config.get("reorder", None)
-        if reorder_kwargs is not None:
-            reorder_config = ReorderConfig(**reorder_kwargs)
-        else:
-            reorder_config = None
+        if transform_dict:
+            transform_path = transform_dict.get("path", "")
 
-        # Smooth config
-        smooth_kwargs = config.get("smooth", None)
-        if smooth_kwargs is not None:
-            smooth_config = SmoothConfig(**smooth_kwargs)
-        else:
-            smooth_config = None
+            rotate_kwargs = transform_dict.get("rotate", None)
+            if rotate_kwargs is not None:
+                rotate_config = RotateConfig(**rotate_kwargs)
 
-        # Quantization config
-        quant_kwargs = config.get("quant", None)
-        if quant_kwargs is not None:
-            quant_config = QuantConfig.from_dict(quant_kwargs)
-        else:
-            quant_config = None
+            reorder_kwargs = transform_dict.get("reorder", None)
+            if reorder_kwargs is not None:
+                reorder_config = ReorderConfig(**reorder_kwargs)
 
-        # Weight quantization config
-        weight_quant_kwargs = config.get("weight_quant")
-        if weight_quant_kwargs is not None:
-            weight_quant_config = WeightQuantConfig(**weight_quant_kwargs)
-            weight_quant_config.args = quant_config.weight
-        else:
-            weight_quant_config = None
+            smooth_kwargs = transform_dict.get("smooth", None)
+            if smooth_kwargs is not None:
+                smooth_config = SmoothConfig(**smooth_kwargs)
+
+        # quant config
+        quant_dict = config.get("quant", None)
+        quant_path = ""
+        quant_config = None
+        weight_quant_config = None
+        act_quant_config = None
+
+        if quant_dict:
+            quant_path = quant_dict.get("path", "")
+            quant_config = QuantConfig.from_dict(quant_dict)
+
+            # weight quantization config
+            weight_dict = quant_dict.get("weight", None)
+            if weight_dict is not None and quant_config.weight is not None:
+                mod_dict = weight_dict.get("mod", {})
+                weight_quant_config = WeightQuantConfig(
+                    args=quant_config.weight,
+                    method=mod_dict.get("method", "gptq"),
+                    block_size=mod_dict.get("block_size", 128),
+                    perc_damp=mod_dict.get("perc_damp", 0.01)
+                )
+
+            # activation quantization config
+            if quant_config.input is not None or quant_config.output is not None:
+                output_dict = quant_dict.get("output", None)
+                if output_dict is not None:
+                    output_mod = output_dict.get("mod", {})
+                    skips = output_mod.get("skips", [])
+
+                act_quant_config = ActivationQuantConfig(
+                    input_args=quant_config.input,
+                    output_args=quant_config.output,
+                    skips=skips if skips else []
+                )
 
         return cls(
             calib=calib_config,
+            transform_path=transform_path,
             rotate=rotate_config,
             reorder=reorder_config,
             smooth=smooth_config,
+            quant_path=quant_path,
             quant=quant_config,
-            weight_quant=weight_quant_config
+            weight_quant=weight_quant_config,
+            act_quant=act_quant_config
         )

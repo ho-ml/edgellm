@@ -1,5 +1,5 @@
 from typing import *
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 
 __all__ = ["QuantArgs", "QuantConfig"]
 
@@ -19,7 +19,7 @@ class QuantArgs:
     observer_kwargs: Dict[str, Any] = field(default_factory=dict)
 
     # params dtype
-    scale_dtype: Optional[str] = None   
+    scale_dtype: Optional[str] = None
     zero_dtype: Optional[str] = None
 
 @dataclass
@@ -28,13 +28,13 @@ class QuantConfig:
     Quantization config for compressor
     """
     weight: Optional[QuantArgs] = None
-    activation: Optional[QuantArgs] = None
-    kv_cache: Optional[QuantArgs] = None
+    input: Optional[QuantArgs] = None
+    output: Optional[QuantArgs] = None
 
     @classmethod
     def w4a8(cls):
         """
-        W4A8 preset: 4-bit weight, 8-bit activation
+        W4A8 preset: 4-bit weight, 8-bit input activation
         """
         return cls(
             weight=QuantArgs(
@@ -43,13 +43,20 @@ class QuantConfig:
                 group_size=128,
                 observer="memoryless-minmax"
             ),
-            activation=QuantArgs(
+            input=QuantArgs(
                 bits=8,
                 strategy="token",
                 dynamic=True,
                 observer="minmax"
             ),
-            kv_cache=None
+            output=QuantArgs(
+                bits=4,
+                symmetric=False,
+                strategy="group",
+                group_size=128,
+                dynamic=True,
+                observer="minmax"
+            ),
         )
 
     @classmethod
@@ -64,14 +71,20 @@ class QuantConfig:
                 group_size=128,
                 observer="memoryless-minmax"
             ),
-            activation=None,
-            kv_cache=None
+            output=QuantArgs(
+                bits=4,
+                symmetric=False,
+                strategy="group",
+                group_size=128,
+                dynamic=True,
+                observer="minmax"
+            ),
         )
 
     @classmethod
     def w8a8(cls):
         """
-        W8A8 preset: 8-bit weight, 8-bit activation quantization
+        W8A8 preset: 8-bit weight, 8-bit input activation quantization
         """
         return cls(
             weight=QuantArgs(
@@ -80,34 +93,46 @@ class QuantConfig:
                 group_size=128,
                 observer="memoryless-minmax"
             ),
-            activation=QuantArgs(
+            input=QuantArgs(
                 bits=8,
                 strategy="token",
                 dynamic=True,
                 observer="minmax"
             ),
-            kv_cache=None
         )
-    
+
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]):
         """
         Create config from dictionary
         """
         weight = None
-        activation = None
-        kv_cache = None
+        input_args = None
+        output_args = None
 
-        # quant config
-        if "weight" in config_dict and config_dict["weight"] is not None:
-            weight = QuantArgs(**config_dict["weight"])
-        if "activation" in config_dict and config_dict["activation"] is not None:
-            activation = QuantArgs(**config_dict["activation"])
-        if "kv_cache" in config_dict and config_dict["kv_cache"] is not None:
-            kv_cache = QuantArgs(**config_dict["kv_cache"])
-                
+        # weight
+        weight_dict = config_dict.get("weight", None)
+        if weight_dict is not None:
+            args_dict = weight_dict.get("args", {})
+            if args_dict:
+                weight = QuantArgs(**args_dict)
+
+        # input
+        input_dict = config_dict.get("input", None)
+        if input_dict is not None:
+            args_dict = input_dict.get("args", {})
+            if args_dict:
+                input_args = QuantArgs(**args_dict)
+
+        # output
+        output_dict = config_dict.get("output", None)
+        if output_dict is not None:
+            args_dict = output_dict.get("args", {})
+            if args_dict:
+                output_args = QuantArgs(**args_dict)
+
         return cls(
-            weight=weight, 
-            activation=activation, 
-            kv_cache=kv_cache
+            weight=weight,
+            input=input_args,
+            output=output_args,
         )

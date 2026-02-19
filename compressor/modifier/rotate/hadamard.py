@@ -4,7 +4,7 @@ import torch.nn as nn
 from typing import *
 from dataclasses import dataclass
 from scipy.linalg import hadamard
-from compressor.utils import PersistentInputHook
+from compressor.utils import PersistentHook
 
 __all__ = [
     "HadamardMatrix",
@@ -15,7 +15,7 @@ __all__ = [
 ]
 
 @dataclass
-class HadamardInputHook(PersistentInputHook):
+class HadamardInputHook(PersistentHook):
     """
     Forward pre hook for Hadamard transformation on down_proj input
     """

@@ -87,22 +87,13 @@ class Observer(nn.Module, RegistryMixin):
                 return x
             
             # (batch_size * seq_len, num_groups, group_size)
-            elif strategy == "group":
-                return x.flatten(0, 1).unflatten(-1, (-1, self.args.group_size))
-        
-            else:
-                raise ValueError(f"Unsupported strategy {strategy} in {target}")
-        
-        # (batch_size, num_heads, seq_len, head_dim)
-        elif target == "kv_cache":
-            # (batch_size * seq_len, 1, num_heads * head_dim)
-            if strategy == "tensor":
-                return x.transpose(1, 2).flatten(0, 1).flatten(-2, -1).unsqueeze(-2)
+            # elif strategy == "group":
+            #     return x.flatten(0, 1).unflatten(-1, (-1, self.args.group_size))
 
-            # (batch_size * seq_len, num_heads, 1, 1, head_dim)
-            elif strategy == "head":
-                return x.transpose(1, 2).flatten(0, 1).unsqueeze(-2).unsqueeze(-2)
-            
+            # (batch_size, seq_len, num_groups, group_size)
+            elif strategy == "group":
+                return x.unflatten(-1, (-1, self.args.group_size))
+
             else:
                 raise ValueError(f"Unsupported strategy {strategy} in {target}")
 

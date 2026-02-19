@@ -6,40 +6,57 @@ calib:
   max_length: 0
   seed: 42
 
-rotate:
-  enabled: true
-  random: false
+transform:
   path: ""
-  rotate_out: true   # qoq: rotation.transforms: [out_proj]
-  rotate_down: false # qoq: no Hadamard hook
+  rotate:
+    enabled: false
+    random: false
+    rotate_out: true   
+    rotate_down: false 
 
-reorder:
-  enabled: true
-  path: ""
-  reorder_out: false # qoq: not in reorder.skips
-  reorder_down: true # qoq: not in reorder.skips
+  reorder:
+    enabled: false
+    reorder_out: false 
+    reorder_down: true 
 
-smooth:
-  enabled: true
-  path: ""
-  smooth_attn: true  # qoq: smooth.enable_attn: true
-  smooth_qkv: false  # qoq: smooth.proj.skips: [qkv_proj]
-  smooth_vo: false   # qoq: smooth.proj.skips: [out_proj]
-  smooth_ffn: false  # qoq: smooth.proj.skips: [up_proj]
-  smooth_down: true  # qoq: down_proj not in smooth.proj.skips (applied with reorder_down)
-  alpha: 0.5         # qoq: smooth.attn.alpha: 0.5
+  smooth:
+    enabled: false
+    smooth_attn: true  
+    smooth_qkv: false  
+    smooth_vo: false  
+    smooth_ffn: false 
+    smooth_down: true 
+    alpha: 0.5        
 
 quant:
+  path: ""
   weight:
-    bits: 4
-    strategy: "group"
-    group_size: 128
-    symmetric: true
-    observer: "memoryless-minmax"
-  activation: null
-  kv_cache: null
-
-weight_quant:
-  method: "gptq"
-  block_size: 128
-  perc_damp: 0.01
+    args:
+      bits: 4
+      strategy: "group"
+      group_size: 128
+      symmetric: true
+      observer: "memoryless-minmax"
+    mod:
+      method: "gptq"
+      block_size: 128
+      perc_damp: 0.01
+  
+  input:
+    args:
+      bits: 8
+      symmetric: true
+      strategy: "token"
+      dynamic: true
+      observer: "minmax"
+  
+  output:
+    args:
+      bits: 4
+      symmetric: false
+      strategy: "group"
+      group_size: 128
+      dynamic: true
+      observer: "minmax"
+    mod:
+      skips: "q_proj"

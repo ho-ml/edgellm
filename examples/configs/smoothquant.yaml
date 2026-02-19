@@ -6,27 +6,27 @@ calib:
   max_length: 0
   seed: 42
 
-smooth:
-  enabled: true
+transform:
   path: ""
-  smooth_attn: true 
-  smooth_qkv: true  
-  smooth_vo: false   
-  smooth_ffn: true  
-  smooth_down: false  
-  alpha: 0.85         
+  smooth:
+    enabled: true
+    smooth_attn: true
+    smooth_qkv: true
+    smooth_vo: false
+    smooth_ffn: true
+    smooth_down: false
+    alpha: 0.85
 
 quant:
+  path: ""
   weight:
-    bits: 8
-    strategy: "group"
-    group_size: 128
-    symmetric: true
-    observer: "memoryless-minmax"
-  activation: null
-  kv_cache: null
-
-weight_quant:
-  method: "gptq"
-  block_size: 128
-  perc_damp: 0.01
+    args:
+      bits: 8
+      strategy: "group"
+      group_size: 128
+      symmetric: true
+      observer: "memoryless-minmax"
+    mod:
+      method: "gptq"
+      block_size: 128
+      perc_damp: 0.01
