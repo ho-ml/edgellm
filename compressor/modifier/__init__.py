@@ -5,3 +5,4 @@ from .reorder import *
 from .gptq import *
 from .rtn import *
 from .weight import *
+from .activation import *

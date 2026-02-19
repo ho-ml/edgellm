@@ -43,6 +43,7 @@ class WeightQuantModifier(Modifier):
         Initialize by creating and initializing the appropriate modifier
         """
         method = self.config.method.lower()
+        
         # create internal modifier
         if method == "gptq":
             from compressor.modifier.gptq import GPTQModifier

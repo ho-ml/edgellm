@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, PrivateAttr
 from torch.utils.hooks import RemovableHandle
 
-__all__ = ["HooksMixin", "PersistentInputHook"]
+__all__ = ["HooksMixin", "PersistentHook"]
 
 class HooksMixin(BaseModel):
     """
@@ -96,25 +96,16 @@ class HooksMixin(BaseModel):
         self._hooks -= handles
 
 @dataclass
-class PersistentInputHook:
+class PersistentHook:
     """
-    Base class for forward_pre hooks that transform input tensors
+    Base class for persistent hooks that transform tensors
     """
     def process(self, x: torch.Tensor):
         ...
 
-    def __call__(self, _, args, kwargs):
-        if args:
-            x = args[0]
-            return (self.process(x),) + args[1:], kwargs
-        else:
-            key = next(iter(kwargs))
-            x = kwargs[key]
-            return args, {**kwargs, key: self.process(x)}
-
     def as_input_hook(self):
         """
-        Make forward pre hook
+        Make forward_pre_hook (with_kwargs=True)
         """
         def hook(_, args, kwargs):
             if args:
@@ -124,5 +115,16 @@ class PersistentInputHook:
                 key = next(iter(kwargs))
                 x = kwargs[key]
                 return args, {**kwargs, key: self.process(x)}
+        
+        return hook
 
+    def as_output_hook(self):
+        """
+        Make forward_hook
+        """
+        def hook(_module, _input, output):
+            if isinstance(output, tuple):
+                return (self.process(output[0]),) + output[1:]
+            return self.process(output)
+        
         return hook

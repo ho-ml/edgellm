@@ -7,14 +7,13 @@ calib:
   seed: 42
 
 quant:
+  path: ""
   weight:
-    bits: 4
-    strategy: "group"
-    group_size: 128
-    symmetric: true
-    observer: "memoryless-minmax"
-  activation: null
-  kv_cache: null
-
-weight_quant:
-  method: "rtn"
+    args:
+      bits: 4
+      strategy: "group"
+      group_size: 128
+      symmetric: true
+      observer: "memoryless-minmax"
+    mod:
+      method: "rtn"

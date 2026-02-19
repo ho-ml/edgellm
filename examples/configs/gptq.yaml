@@ -7,16 +7,15 @@ calib:
   seed: 42
 
 quant:
+  path: ""
   weight:
-    bits: 4
-    strategy: "group"
-    group_size: 128
-    symmetric: true
-    observer: "memoryless-minmax"
-  activation: null
-  kv_cache: null
-
-weight_quant:
-  method: "gptq"
-  block_size: 128
-  perc_damp: 0.01
+    args:
+      bits: 4
+      strategy: "group"
+      group_size: 128
+      symmetric: true
+      observer: "memoryless-minmax"
+    mod:
+      method: "gptq"
+      block_size: 128
+      perc_damp: 0.01
