@@ -9,7 +9,7 @@ from compressor.config.quant import QuantArgs
 from compressor.calib import CalibDataLoader
 from compressor.nn.struct import LLMStruct, DecoderStruct
 from compressor.modifier.base import Modifier
-from compressor.modifier.activation.hooks import DynamicInputQuantHook, DynamicOutputQuantHook
+from compressor.modifier.activation.hooks import DynamicQuantHook
 
 __all__ = ["ActivationQuantConfig", "ActivationQuantModifier"]
 
@@ -66,40 +66,40 @@ class ActivationQuantModifier(Modifier):
 
             # input
             if input_args is not None:
-                input_hook = DynamicInputQuantHook(args=input_args)
+                hook = DynamicQuantHook(args=input_args)
                 self.register_persistent_hook(
-                    proj, input_hook.as_input_hook(),
+                    proj, hook.as_input_hook(),
                     "forward_pre", with_kwargs=True
                 )
 
             # output
             if output_args is not None and rname not in skips:
-                output_hook = DynamicOutputQuantHook(args=output_args)
+                hook = DynamicQuantHook(args=output_args)
                 self.register_persistent_hook(
-                    proj, output_hook.as_output_hook(), "forward"
+                    proj, hook.as_output_hook(), "forward"
                 )
 
         # o proj
         if input_args is not None and attn.o_proj is not None:
-            input_hook = DynamicInputQuantHook(args=input_args)
+            hook = DynamicQuantHook(args=input_args)
             self.register_persistent_hook(
-                attn.o_proj, input_hook.as_input_hook(),
+                attn.o_proj, hook.as_input_hook(),
                 "forward_pre", with_kwargs=True
             )
 
         # up projs
         if input_args is not None:
             for proj in ffn.up_projs:
-                input_hook = DynamicInputQuantHook(args=input_args)
+                hook = DynamicQuantHook(args=input_args)
                 self.register_persistent_hook(
-                    proj, input_hook.as_input_hook(),
+                    proj, hook.as_input_hook(),
                     "forward_pre", with_kwargs=True
                 )
 
             # down proj
-            input_hook = DynamicInputQuantHook(args=input_args)
+            hook = DynamicQuantHook(args=input_args)
             self.register_persistent_hook(
-                ffn.down_proj, input_hook.as_input_hook(),
+                ffn.down_proj, hook.as_input_hook(),
                 "forward_pre", with_kwargs=True
             )
     

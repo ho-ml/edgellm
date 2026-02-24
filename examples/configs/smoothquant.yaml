@@ -22,11 +22,18 @@ quant:
   weight:
     args:
       bits: 8
-      strategy: "group"
-      group_size: 128
+      strategy: "channel"
       symmetric: true
       observer: "memoryless-minmax"
     mod:
       method: "gptq"
       block_size: 128
       perc_damp: 0.01
+
+  input:
+    args:
+      bits: 8
+      symmetric: true
+      strategy: "token"
+      dynamic: true
+      observer: "minmax"

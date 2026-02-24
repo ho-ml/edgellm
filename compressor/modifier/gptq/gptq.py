@@ -7,35 +7,26 @@ from loguru import logger
 from compressor.config import QuantArgs
 from compressor.observers import Observer
 from compressor.utils import fake_quantize
+from compressor.modifier.weight.progressive import calculate_progressive_scales
 
-def gptq_quantize(
+__all__ = ["quantize_weight"]
+
+def gptq(
     name: str,
-    module: nn.Module,
-    quant_args: QuantArgs,
-    hessians_dict: dict[str, torch.Tensor],
-    block_size: int = 128,
-    perc_damp: float = 0.01
+    W: torch.Tensor,
+    args: QuantArgs,
+    H: torch.Tensor,
+    scale: torch.Tensor,
+    zero: torch.Tensor,
+    block_size: int,
+    perc_damp: float
 ):
     """
-    Quantize a module weight according to the GPTQ algorithm
+    Core GPTQ algorithms with pre-computed scale and zero
     """
-    strategy = quant_args.strategy
-
-    # current weights and hessian matrix
-    W = module.weight.clone()
-    ori_shape, ori_dtype = module.weight.shape, module.weight.dtype
-    H = hessians_dict[name]
-    del hessians_dict[name]
-
-    # get shapes
-    W = W.to(dtype=torch.float32)
+    strategy = args.strategy
     num_rows = W.shape[0]
     num_cols = W.shape[1]
-
-    # get quantization params
-    observer_cls = Observer.get(quant_args.observer)
-    observer = observer_cls(args=quant_args)
-    scale, zero = observer(W, target="weight")
 
     # mask dead hessians
     dead = torch.diag(H) == 0
@@ -50,18 +41,15 @@ def gptq_quantize(
 
     # compute inverse Hessian in-place
     try:
-        # add damping
         damp = perc_damp * torch.mean(torch.diag(H))
         diag = torch.arange(H.shape[0], device=H.device)
         H[diag, diag] += damp
 
-        # Cholesky decomposition
         H = torch.linalg.cholesky(H)
         H = torch.cholesky_inverse(H)
         H = torch.linalg.cholesky(H, upper=True)
         Hinv = H
 
-    # fallback to RTN
     except torch._C._LinAlgError:
         logger.warning(f"[{name}] Cholesky failed! Falling back to RTN.")
         Hinv = H = torch.eye(num_cols, dtype=H.dtype, device=H.device)
@@ -87,18 +75,14 @@ def gptq_quantize(
 
             # quantize column
             if strategy == "tensor":
-                q = fake_quantize(
-                    q, scale, zero, quant_args
-                )
+                q = fake_quantize(q, scale, zero, args)
             elif strategy == "channel":
-                q = fake_quantize(
-                    q, scale[:, 0], zero[:, 0], quant_args
-                )
+                q = fake_quantize(q, scale[:, 0], zero[:, 0], args)
             elif strategy == "group":
-                group_idx = perm[i1 + i] // quant_args.group_size
+                group_idx = perm[i1 + i] // args.group_shapes[-1][-1]
 
                 # channel-wise for this group
-                altered_args = copy.copy(quant_args)
+                altered_args = copy.copy(args)
                 altered_args.strategy = "channel"
                 q = fake_quantize(
                     q, scale[:, group_idx], zero[:, group_idx], altered_args
@@ -128,16 +112,65 @@ def gptq_quantize(
 
     # restore original column order
     W = W[:, inv_perm]
-
-    # return back quantized weight to original shape & dtype
-    W = W.reshape(ori_shape).to(dtype=ori_dtype)
-
-    # calculate loss
     loss = torch.sum(losses).item()
+
+    return loss, W, scale, zero    
+
+def quantize_weight(
+    name: str,
+    module: nn.Module,
+    args: QuantArgs,
+    hessians_dict: dict[str, torch.Tensor],
+    block_size: int = 128,
+    perc_damp: float = 0.01
+):
+    """
+    Quantize a module weight according to the GPTQ algorithm
+    
+    - pre-computes channel and group scales for progrssive group quantization
+    - run gptq algorithms on the normalized weights
+    """
+    W = module.weight.clone()
+    ori_shape, ori_dtype = module.weight.shape, module.weight.dtype
+    H = hessians_dict[name]
+    del hessians_dict[name]
+
+    # cast dtype
+    W = W.to(dtype=torch.float32)
+
+    if args.is_progressive:
+        # get progressive scales & float-normalized weights
+        W, scale_0, scale_1, zero_1 = calculate_progressive_scales(W, args)
+
+        # run gptq algorithm on float-normalized weights
+        loss, W, _, _ = gptq(
+            name, W, args, H, scale_1, zero_1, block_size, perc_damp
+        )
+
+        # normalize loss from W_norm space back to original weight space
+        loss = loss * scale_0.pow(2).mean().item()        
+
+        return (
+            loss,
+            W.reshape(ori_shape).to(ori_dtype),
+            scale_0.to(ori_dtype),
+            scale_1.to(ori_dtype),
+            zero_1.to(ori_dtype)
+        )
+
+    # initialize scale & zero
+    observer_cls = Observer.get(args.observer)
+    observer = observer_cls(args=args)
+    scale, zero = observer(W, target="weight")    
+
+    # run gptq algorightm
+    loss, W, scale, zero = gptq(
+        name, W, args, H, scale, zero, block_size, perc_damp
+    )
 
     return (
         loss,
-        W,
-        scale.to(dtype=ori_dtype),
-        zero.to(dtype=ori_dtype),
+        W.reshape(ori_shape).to(ori_dtype),
+        scale.to(ori_dtype),
+        zero.to(ori_dtype)
     )

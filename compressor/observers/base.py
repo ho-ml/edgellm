@@ -71,7 +71,7 @@ class Observer(nn.Module, RegistryMixin):
             
             # (1, out_feats, num_groups, group_size)
             elif strategy == "group":
-                return x.unflatten(-1, (-1, self.args.group_size)).unsqueeze(0)
+                return x.unflatten(-1, (-1, self.args.group_shapes[-1][-1])).unsqueeze(0)
             
             else:
                 raise ValueError(f"Unsupported strategy {strategy} in {target}")
@@ -85,14 +85,10 @@ class Observer(nn.Module, RegistryMixin):
             # (batch_size, seq_len, hidden_dim)
             elif strategy == "token":
                 return x
-            
-            # (batch_size * seq_len, num_groups, group_size)
-            # elif strategy == "group":
-            #     return x.flatten(0, 1).unflatten(-1, (-1, self.args.group_size))
 
             # (batch_size, seq_len, num_groups, group_size)
             elif strategy == "group":
-                return x.unflatten(-1, (-1, self.args.group_size))
+                return x.unflatten(-1, (-1, self.args.group_shapes[-1][-1]))
 
             else:
                 raise ValueError(f"Unsupported strategy {strategy} in {target}")

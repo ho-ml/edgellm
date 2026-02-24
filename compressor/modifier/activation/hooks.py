@@ -5,35 +5,21 @@ from compressor.config.quant import QuantArgs
 from compressor.observers import Observer
 from compressor.utils import PersistentHook, fake_quantize
 
-__all__ = ["DynamicInputQuantHook", "DynamicOutputQuantHook"]
-
+__all__ = ["DynamicQuantHook"]
 
 @dataclass
-class DynamicInputQuantHook(PersistentHook):
+class DynamicQuantHook(PersistentHook):
     """
-    Forward pre hook for dynamic input activation quantization
+    Hook function to apply dynamic quantization for activation
     """
     args: QuantArgs
 
     def process(self, x: torch.Tensor):
+        # get observer
         observer_cls = Observer.get(self.args.observer)
         observer = observer_cls(self.args).to(x.device)
-        scale, zero = observer(x, target="activation")
-        scale, zero = _reshape_scale_zero(scale, zero, self.args.strategy)
 
-        return fake_quantize(x, scale, zero, self.args)
-
-
-@dataclass
-class DynamicOutputQuantHook(PersistentHook):
-    """
-    Forward hook for dynamic output activation quantization
-    """
-    args: QuantArgs
-
-    def process(self, x: torch.Tensor):
-        observer_cls = Observer.get(self.args.observer)
-        observer = observer_cls(self.args).to(x.device)
+        # calculate qparams
         scale, zero = observer(x, target="activation")
         scale, zero = _reshape_scale_zero(scale, zero, self.args.strategy)
 

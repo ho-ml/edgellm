@@ -9,6 +9,7 @@ from compressor.nn.struct import LLMStruct, DecoderStruct
 from compressor.modifier.weight.base import WeightQuantConfig
 from compressor.modifier.base import Modifier
 from compressor.utils import fake_quantize
+from compressor.modifier.weight.progressive import calculate_progressive_scales, restore_weight
 
 __all__ = ["RTNModifier"]
 
@@ -41,14 +42,24 @@ class RTNModifier(Modifier):
             ori_dtype = module.weight.dtype
             args = self.config.args
 
-            # get observer and compute scales
-            observer_cls = Observer.get(args.observer)
-            observer = observer_cls(args=args)
-            scale, zero = observer(W, target="weight")
+            if args.is_progressive:
+                # compute 2-level scales
+                x_norm, scale_0, scale_1, zero_1 = calculate_progressive_scales(W, args)
+                level0_col = args.group_shapes[0][-1]
 
-            # apply fake quantize
-            qweight = fake_quantize(W, scale, zero, args)
-            qweight = qweight.to(ori_dtype)
+                # fake quantize normalized weight
+                qweight = fake_quantize(x_norm, scale_1, zero_1, args)
+                qweight = restore_weight(qweight, scale_0, level0_col).to(ori_dtype)
+                
+            else:
+                # get observer and compute scales
+                observer_cls = Observer.get(args.observer)
+                observer = observer_cls(args=args)
+                scale, zero = observer(W, target="weight")
+
+                # apply fake quantize
+                qweight = fake_quantize(W, scale, zero, args)
+                qweight = qweight.to(ori_dtype)
 
             module.weight.data = qweight
 

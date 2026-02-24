@@ -10,7 +10,8 @@ from compressor.calib import CalibDataLoader
 from compressor.nn.struct import LLMStruct, DecoderStruct
 from compressor.modifier.weight.base import WeightQuantConfig
 from compressor.modifier.base import Modifier
-from compressor.modifier.gptq.gptq import gptq_quantize
+from compressor.modifier.gptq.gptq import quantize_weight
+from compressor.modifier.weight.progressive import restore_weight
 from compressor.modifier.gptq.hessian import (
     init_hessian, accumulate_hessian, onload_hessian
 )
@@ -107,20 +108,34 @@ class GPTQModifier(Modifier):
         # quantize each linear module
         for name, module in linears.items():
             with onload_hessian(name, module, layer_hessians):
-                loss, qweight, scale, zero = gptq_quantize(
+                result = quantize_weight(
                     name=name,
                     module=module,
-                    quant_args=self.config.args,
+                    args=self.config.args,
                     hessians_dict=layer_hessians,
                     block_size=self.config.block_size,
                     perc_damp=self.config.perc_damp,
                 )
 
+            if self.config.args.is_progressive:
+                loss, qweight, scale_0, scale_1, zero = result
+                level0_col = self.config.args.group_shapes[0][-1]
+
+                # restore float weight using level-0 scale
+                restored = restore_weight(qweight, scale_0, level0_col)
+                module.weight.data = restored.to(qweight.dtype)
+                self._qparams[f"layer.{layer_idx}.{name}.scale_0"] = scale_0
+                self._qparams[f"layer.{layer_idx}.{name}.scale_1"] = scale_1
+                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero
+            
+            else:
+                loss, qweight, scale, zero = result
+                module.weight.data = qweight
+                self._qparams[f"layer.{layer_idx}.{name}.scale"] = scale
+                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero
+
             # save result
             self._losses[layer_idx][name] = loss
-            module.weight.data = qweight
-            self._qparams[f"layer.{layer_idx}.{name}.scale"] = scale
-            self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero
 
         # clean layer dicts
         if layer_idx in self._hessians:
