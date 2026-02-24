@@ -1,3 +1,4 @@
+from typing import *
 from datasets import load_dataset
 from compressor.data.base import CalibDataset
 
@@ -26,8 +27,6 @@ class UltraChatDataset(CalibDataset):
     split = "train_sft"
     text_key = "text"
 
-    # TODO: fix error
-
     def __init__(
         self, 
         tokenizer, 
@@ -40,6 +39,7 @@ class UltraChatDataset(CalibDataset):
         # set chat template if not exists
         if getattr(tokenizer, "chat_template", None) is None:
             tokenizer.chat_template = DEFAULT_CHAT_TEMPLATE
+        self.tokenizer = tokenizer  
 
         super().__init__(
             tokenizer=tokenizer,
@@ -61,7 +61,7 @@ class UltraChatDataset(CalibDataset):
             split=self.split,
             streaming=True
         )
-        dataset = dataset.shuffle(seed=seed, buffer_size=10000)
+        dataset = dataset.shuffle(seed=seed, buffer_size=500)
 
         def apply_chat_template(sample):
             messages = sample["messages"]
@@ -80,7 +80,9 @@ class UltraChatDataset(CalibDataset):
             return {"text": text}
 
         # store tokenizer reference for map function
-        self._tokenizer = self.__dict__.get("_init_tokenizer")
         dataset = dataset.map(apply_chat_template)
+
+        # get only text columns
+        dataset = dataset.select_columns(["text"])
 
         return dataset

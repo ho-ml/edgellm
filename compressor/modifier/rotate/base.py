@@ -1,4 +1,5 @@
 import torch
+import contextlib
 import torch.nn as nn
 
 from typing import *
@@ -88,22 +89,8 @@ class RotateModifier(Modifier):
                 random=self.config.random
             )
 
-        # save current states and convert to fp32
-        ori_states = []
-        for m in model_struct.model.modules():
-            if isinstance(m, nn.Linear):
-                ori_states.append(
-                    (m.weight.device, m.weight.dtype, m)
-                )
-        for _, _, module in ori_states:
-            module.to(dtype=torch.float32, device="cpu")
-
         # apply rotation to whole model
         self._rotate()
-
-        # return back to original states
-        for device, dtype, module in ori_states:
-            module.to(device=device, dtype=dtype)
 
     @torch.inference_mode()
     def _rotate(self):
@@ -128,50 +115,53 @@ class RotateModifier(Modifier):
 
             # fuse input_layernorm → qkv_projs
             if layer_struct.input_layernorm is not None:
-                fuse_ln_fcs(layer_struct.input_layernorm, attn.qkv_projs)
-                rms = convert_ln_to_rms(
-                    parent=layer_struct.module,
-                    norm_rname=layer_struct.input_layernorm_rname,
-                    modules=prev_ln,
-                    out_dims=prev_out_dim,
-                )
-                if rms is not None:
-                    layer_struct.input_layernorm = rms
+                with move_to_fp32(*attn.qkv_projs, *prev_ln):
+                    fuse_ln_fcs(layer_struct.input_layernorm, attn.qkv_projs)
+                    rms = convert_ln_to_rms(
+                        parent=layer_struct.module,
+                        norm_rname=layer_struct.input_layernorm_rname,
+                        modules=prev_ln,
+                        out_dims=prev_out_dim,
+                    )
+                    if rms is not None:
+                        layer_struct.input_layernorm = rms
 
             prev_ln = [attn.o_proj]
             prev_out_dim = 0
 
             # fuse post_attention_layernorm → up_projs
             if layer_struct.post_attention_layernorm is not None:
-                fuse_ln_fcs(layer_struct.post_attention_layernorm, ffn.up_projs)
-                rms = convert_ln_to_rms(
-                    parent=layer_struct.module,
-                    norm_rname=layer_struct.post_attention_layernorm_rname,
-                    modules=prev_ln,
-                    out_dims=prev_out_dim,
-                )
-                if rms is not None:
-                    layer_struct.post_attention_layernorm = rms
+                with move_to_fp32(*ffn.up_projs, *prev_ln):
+                    fuse_ln_fcs(layer_struct.post_attention_layernorm, ffn.up_projs)
+                    rms = convert_ln_to_rms(
+                        parent=layer_struct.module,
+                        norm_rname=layer_struct.post_attention_layernorm_rname,
+                        modules=prev_ln,
+                        out_dims=prev_out_dim,
+                    )
+                    if rms is not None:
+                        layer_struct.post_attention_layernorm = rms
 
             prev_ln = [ffn.down_proj]
             prev_out_dim = 0
 
         # fuse final_norm → lm_head
-        if (
-            model_struct.norm is not None
-            and model_struct.lm_head is not None
-        ):
-            fuse_ln_fcs(model_struct.norm, [model_struct.lm_head])
+        with move_to_fp32(model_struct.lm_head, *prev_ln):
+            if (
+                model_struct.norm is not None
+                and model_struct.lm_head is not None
+            ):
+                fuse_ln_fcs(model_struct.norm, [model_struct.lm_head])
 
-        if model_struct.norm is not None:
-            rms = convert_ln_to_rms(
-                parent=model_struct.backbone,
-                norm_rname=model_struct.norm_rname,
-                modules=prev_ln,
-                out_dims=prev_out_dim,
-            )
-            if rms is not None:
-                model_struct.norm = rms
+            if model_struct.norm is not None:
+                rms = convert_ln_to_rms(
+                    parent=model_struct.backbone,
+                    norm_rname=model_struct.norm_rname,
+                    modules=prev_ln,
+                    out_dims=prev_out_dim,
+                )
+                if rms is not None:
+                    model_struct.norm = rms
 
         # rotate embed_tokens
         rotate_in(model_struct.embed_tokens.weight, rotation)
@@ -181,25 +171,27 @@ class RotateModifier(Modifier):
         for layer_struct in model_struct.layer_structs:
             attn = layer_struct.attn_struct
             ffn = layer_struct.ffn_struct
+            
+            with move_to_fp32(*attn.qkv_projs, attn.o_proj):
+                # compensate rotation on qkv input
+                for proj in attn.qkv_projs:
+                    rotate_in(proj.weight, rotation)
 
-            # compensate rotation on qkv input
-            for proj in attn.qkv_projs:
-                rotate_in(proj.weight, rotation)
+                # apply rotation to o_proj output
+                rotate_out(attn.o_proj.weight, rotation, attn.o_proj.bias)
 
-            # apply rotation to o_proj output
-            rotate_out(attn.o_proj.weight, rotation, attn.o_proj.bias)
-
-            # apply head rotation each value heads
-            if head_rotation is not None:
-                rotate_out(attn.v_proj.weight, head_rotation, attn.v_proj.bias)
-                rotate_in(attn.o_proj.weight, head_rotation)
+                # apply head rotation each value heads
+                if head_rotation is not None:
+                    rotate_out(attn.v_proj.weight, head_rotation, attn.v_proj.bias)
+                    rotate_in(attn.o_proj.weight, head_rotation)
 
             # compensate rotation on up_projs input
-            for proj in ffn.up_projs:
-                rotate_in(proj.weight, rotation)
+            with move_to_fp32(*ffn.up_projs, ffn.down_proj):
+                for proj in ffn.up_projs:
+                    rotate_in(proj.weight, rotation)
 
-            # apply rotation to down_proj output
-            rotate_out(ffn.down_proj.weight, rotation, ffn.down_proj.bias)
+                # apply rotation to down_proj output
+                rotate_out(ffn.down_proj.weight, rotation, ffn.down_proj.bias)
 
             # append down_proj for hadamard transform
             if self.config.rotate_down:
@@ -208,12 +200,13 @@ class RotateModifier(Modifier):
         # apply online hadamard rotation to down_proj
         if down_projs:
             for module in down_projs:
-                hadamard_in(module)
+                with move_to_fp32(module):
+                    hadamard_in(module)
 
         # compensate rotation on lm_head input
         if model_struct.lm_head is not None:
-            rotate_in(model_struct.lm_head.weight, rotation)
-        
+            with move_to_fp32(model_struct.lm_head):
+                rotate_in(model_struct.lm_head.weight, rotation)
     
     def apply(self, layer_struct: DecoderStruct, _dataloader: CalibDataLoader):
         """
@@ -270,3 +263,23 @@ class RotateModifier(Modifier):
             log_weight("input_layernorm", layer_struct.input_layernorm.weight)
         if layer_struct.post_attention_layernorm is not None:
             log_weight("post_attention_layernorm", layer_struct.post_attention_layernorm.weight)
+
+@contextlib.contextmanager
+def move_to_fp32(*modules: Optional[nn.Module]):
+    """
+    Temporarily moves Linear modules to CPU in float32 precision
+    """
+    # filter modules
+    modules = [m for m in modules if isinstance(m, nn.Linear)]
+
+    # save current states and convert to fp32
+    ori_states = []
+    for m in modules:
+        ori_states.append((m, m.weight.device, m.weight.dtype))
+        m.to(device="cpu", dtype=torch.float32)
+
+    yield
+
+    # return back
+    for m, device, dtype in ori_states:
+        m.to(device=device, dtype=dtype)

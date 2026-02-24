@@ -59,6 +59,7 @@ class Compressor:
         # initialize modifiers & dataloader
         model_struct = self.dataloader.model_struct
         for modifier in self.modifiers:
+            logger.info(f"Initialize Modifier: {type(modifier).__name__}")
             modifier.initialize(model_struct)
         self.dataloader.initialize()
         logger.info(f"Initialized {len(self.modifiers)} modifiers successfully")
@@ -77,7 +78,7 @@ class Compressor:
 
             # apply modifier
             for modifier in self.modifiers:
-                logger.info(f"Modifier: {type(modifier).__name__}")
+                logger.info(f"Apply Modifier: {type(modifier).__name__}")
                 
                 # clear the memory for debug
                 if LEVEL <= DEBUG:

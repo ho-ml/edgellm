@@ -148,9 +148,7 @@ def convert_ln_to_rms(
     rms = RMSNorm(hidden_size=hidden_size, eps=eps)
 
     # convert to RMSNorm
-    # rms.weight.data = norm.weight.data.clone()
     rms.weight.data = norm.weight.data
-    # rms = rms.to(device=norm.weight.device, dtype=norm.weight.dtype)
     setattr(norm_parent, norm_name, rms)
 
     return rms
