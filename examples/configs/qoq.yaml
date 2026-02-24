@@ -9,18 +9,18 @@ calib:
 transform:
   path: ""
   rotate:
-    enabled: false
+    enabled: true
     random: false
     rotate_out: true   
     rotate_down: false 
 
   reorder:
-    enabled: false
+    enabled: true
     reorder_out: false 
     reorder_down: true 
 
   smooth:
-    enabled: false
+    enabled: true
     smooth_attn: true  
     smooth_qkv: false  
     smooth_vo: false  
@@ -33,9 +33,11 @@ quant:
   weight:
     args:
       bits: 4
+      symmetric: false
       strategy: "group"
-      group_size: 128
-      symmetric: true
+      group_shapes: [[1, -1], [1, 128]]
+      zero_domain: "PostScale"
+      intermediate_bits: 8
       observer: "memoryless-minmax"
     mod:
       method: "gptq"
@@ -55,7 +57,8 @@ quant:
       bits: 4
       symmetric: false
       strategy: "group"
-      group_size: 128
+      group_shapes: [[1, 128]]
+      zero_domain: "PostScale"
       dynamic: true
       observer: "minmax"
     mod:
