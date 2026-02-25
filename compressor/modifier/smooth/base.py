@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 
@@ -66,7 +67,7 @@ class SmoothModifier(Modifier):
         self._act_stats = {}
 
         # cached scales
-        if self.config.path:
+        if self.config.path and os.path.isfile(self.config.path):
             self._scales = torch.load(self.config.path)
             self._initialized = True
             return

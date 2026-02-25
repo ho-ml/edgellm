@@ -73,5 +73,14 @@ eval:
       - wikitext
     num_samples: 128
     seq_length: 2048
+  lm_eval:
+    tasks:
+      - hellaswag
+      - piqa
+      - winogrande
+      - arc_easy
+      - arc_challenge
+    num_fewshot: 0
+    batch_size: 4
   compare_baseline: true
   output_path: "output/qoq/results.json"

@@ -7,9 +7,9 @@ from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 from compressor.utils.registry import RegistryMixin
 
-__all__ = ["CalibDataset"]
+__all__ = ["CalibDataset", "EvalDataset"]
 
-class CalibDataset(RegistryMixin, Dataset):
+class CalibDataset(Dataset, RegistryMixin):
     """
     Base dataset class for calibration
     """
@@ -19,7 +19,7 @@ class CalibDataset(RegistryMixin, Dataset):
     split: str
     text_key: str
 
-    # preprocessed data for calibration
+    # preprocessed data
     data: List[torch.Tensor]
 
     def __init__(
@@ -35,7 +35,7 @@ class CalibDataset(RegistryMixin, Dataset):
         assert num_samples > 0, "num_samples should be larger than 0"
         assert seq_length > 0, "seq_length should be larger than 0"
         assert tokenizer is not None, "tokenizer is required"
-        
+
         # initialize
         random.seed(seed)
         num_tokens = num_samples * seq_length
@@ -47,7 +47,7 @@ class CalibDataset(RegistryMixin, Dataset):
         seqs, toks = [], 0
         for sample in dataset:
             text = sample[self.text_key]
-            
+
             # tokenize
             line = tokenizer.encode(text.strip())
 
@@ -59,13 +59,13 @@ class CalibDataset(RegistryMixin, Dataset):
                 continue
             if max_length > 0 and length > max_length:
                 continue
-            
+
             # random crop
             seq = torch.tensor(line)
             if length > seq_length:
                 tok = random.randint(0, length - seq_length)
                 seq = seq[tok: tok + seq_length]
-            
+
             # update
             seqs.append(seq)
             toks += seq.numel()
@@ -83,10 +83,10 @@ class CalibDataset(RegistryMixin, Dataset):
 
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, idx):
         return self.data[idx]
-    
+
     def get_dataset(self, seed: int):
         """
         Return raw dataset from the given data
@@ -98,5 +98,56 @@ class CalibDataset(RegistryMixin, Dataset):
             streaming=True
         )
         dataset = dataset.shuffle(seed=seed, buffer_size=10000)
-        
+
         return dataset
+
+
+class EvalDataset(Dataset, RegistryMixin):
+    """
+    Base dataset class for evaluation
+    """
+    # raw data config
+    data_name_or_path: str
+    data_config: str | None
+    split: str
+    text_key: str
+
+    # preprocessed data
+    data: List[torch.Tensor]
+
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizer,
+        num_samples: int,
+        seq_length: int,
+    ):
+        # sanity check
+        assert seq_length > 0, "seq_length should be larger than 0"
+        assert tokenizer is not None, "tokenizer is required"
+
+        # load full dataset
+        dataset = load_dataset(
+            self.data_name_or_path,
+            self.data_config,
+            split=self.split,
+        )
+
+        # concatenate all texts with "\n\n" and tokenize as one sequence
+        full_text = "\n\n".join(dataset[self.text_key])
+        input_ids = tokenizer(full_text, return_tensors="pt").input_ids[0]
+
+        # split into non-overlapping chunks of seq_length
+        num_chunks = input_ids.numel() // seq_length
+        if num_samples > 0:
+            num_chunks = min(num_chunks, num_samples)
+
+        self.data = [
+            input_ids[i * seq_length : (i + 1) * seq_length]
+            for i in range(num_chunks)
+        ]
+    
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx]

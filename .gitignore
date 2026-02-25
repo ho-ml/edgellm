@@ -3,3 +3,6 @@
 uv.lock
 *.egg-info
 __pycache__
+
+# directories
+output

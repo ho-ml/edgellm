@@ -76,6 +76,18 @@ class CompressorConfig:
         if self.act_quant is not None and isinstance(self.act_quant.skips, str):
             self.act_quant.skips = [self.act_quant.skips]
 
+        # create parent directories for all output paths
+        for path in [
+            self.rotate.path if self.rotate is not None else "",
+            self.reorder.path if self.reorder is not None else "",
+            self.smooth.path if self.smooth is not None else "",
+            self.weight_quant.path if self.weight_quant is not None else "",
+        ]:
+            if path:
+                parent = os.path.dirname(path)
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
+
     def get_modifiers(self):
         """
         Return list of enabled modifiers in pipeline order:

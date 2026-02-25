@@ -14,8 +14,6 @@ from compressor.utils import (
 
 __all__ = ["Compressor"]
 
-# settings for logger
-LEVEL = logger._core.min_level
 DEBUG = 10
 
 class Compressor:
@@ -73,7 +71,7 @@ class Compressor:
             layer_struct.module = layer_struct.module.to(self.onload_device)
 
             # debug before
-            if LEVEL <= DEBUG:
+            if logger._core.min_level <= DEBUG:
                 self.debug(layer_idx, layer_struct)
 
             # apply modifier
@@ -81,7 +79,7 @@ class Compressor:
                 logger.info(f"Apply Modifier: {type(modifier).__name__}")
                 
                 # clear the memory for debug
-                if LEVEL <= DEBUG:
+                if logger._core.min_level <= DEBUG:
                     if torch.cuda.is_available():
                         torch.cuda.reset_peak_memory_stats()
 
@@ -90,7 +88,7 @@ class Compressor:
                 self.clear()
 
                 # debug after
-                if LEVEL <= DEBUG:
+                if logger._core.min_level <= DEBUG:
                     modifier.debug(layer_idx)
                     log_memory()
 
@@ -143,3 +141,51 @@ class Compressor:
             log_weight("input_layernorm", layer_struct.input_layernorm.weight)
         if layer_struct.post_attention_layernorm is not None:
             log_weight("post_attention_layernorm", layer_struct.post_attention_layernorm.weight)
+
+if __name__ == "__main__":
+    import sys
+    import torch
+    import argparse
+
+    from loguru import logger
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from compressor.config import CompressorConfig, EvalConfig
+    from compressor.evaluate import Evaluator
+
+    # parse arguments
+    parser = argparse.ArgumentParser(description="Compress a LLM")
+    parser.add_argument("--config", required=True, help="Path to yaml config file")
+    parser.add_argument("--model",  required=True, help="Model ID or local path")
+    parser.add_argument("--debug",  action="store_true", help="Enable debug logging")
+    args = parser.parse_args()
+
+    # set logger level
+    logger.remove()
+    logger.add(sys.stderr, level="DEBUG" if args.debug else "INFO")
+
+    # parse config
+    compress_config = CompressorConfig.from_yaml(args.config)
+    eval_config = EvalConfig.from_yaml(args.config)
+
+    # load models
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model,
+        torch_dtype=torch.float16,
+        device_map="cpu",
+        trust_remote_code=True,
+    )
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+
+    # evaluate baselines
+    baseline_results = None
+    if eval_config is not None and eval_config.compare_baseline:
+        logger.info("Evaluating baseline model")
+        baseline_results = Evaluator(eval_config, model, tokenizer).run()
+
+    # compress
+    compressor = Compressor(compress_config, model, tokenizer)
+    compressed_model = compressor.run()
+
+    # evaluate
+    if eval_config is not None:
+        Evaluator(eval_config, compressed_model, tokenizer).run(baseline_results)
