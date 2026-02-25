@@ -15,7 +15,10 @@ transform:
     smooth_vo: false
     smooth_ffn: true
     smooth_down: false
-    alpha: 0.85
+    proj_alpha: 0.85
+    proj_beta: 0.15
+    attn_alpha: 0.5
+    attn_beta: 0
 
 quant:
   path: ""

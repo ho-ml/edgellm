@@ -38,10 +38,9 @@ class CompressorConfig:
         """
         Validate and adjust config
         """
+        # rotate vs. reorder
         rotate_enabled = self.rotate is not None and self.rotate.enabled
         reorder_enabled = self.reorder is not None and self.reorder.enabled
-
-        # rotate vs. reorder
         if rotate_enabled and reorder_enabled:
             # rotate_down + reorder_down
             if self.rotate.rotate_down and self.reorder.reorder_down:
@@ -52,6 +51,12 @@ class CompressorConfig:
             if self.rotate.rotate_out and self.reorder.reorder_out:
                 logger.warning("rotate_out and reorder_out are incompatible.")
                 self.reorder.reorder_out = False
+
+        # smooth proj alpha
+        if self.smooth is not None and self.smooth.enabled:
+            if abs(self.smooth.proj_alpha + self.smooth.proj_beta - 1.0) > 1e-6:
+                logger.warning("sum of sooth alpha and smooth beta must be 1.")
+                self.smooth.proj_beta = 1 - self.smooth.proj_alpha
 
         # determine paths from the transform_path
         if self.transform_path:
