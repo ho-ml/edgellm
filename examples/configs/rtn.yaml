@@ -17,3 +17,12 @@ quant:
       observer: "memoryless-minmax"
     mod:
       method: "rtn"
+
+eval:
+  ppl:
+    datasets:
+      - wikitext
+    num_samples: 128
+    seq_length: 2048
+  compare_baseline: true
+  output_path: "output/qoq/results.json"

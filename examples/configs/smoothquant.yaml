@@ -40,3 +40,12 @@ quant:
       strategy: "token"
       dynamic: true
       observer: "minmax"
+
+eval:
+  ppl:
+    datasets:
+      - wikitext
+    num_samples: 128
+    seq_length: 2048
+  compare_baseline: true
+  output_path: "output/qoq/results.json"

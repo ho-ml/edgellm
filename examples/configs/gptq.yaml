@@ -19,3 +19,12 @@ quant:
       method: "gptq"
       block_size: 128
       perc_damp: 0.01
+
+eval:
+  ppl:
+    datasets:
+      - wikitext
+    num_samples: 128
+    seq_length: 2048
+  compare_baseline: true
+  output_path: results.json

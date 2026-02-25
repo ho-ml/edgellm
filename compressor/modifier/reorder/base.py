@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 
@@ -15,8 +16,6 @@ from compressor.modifier.reorder.reorder import (
 )
 from compressor.utils import ActStats
 
-# settings for logger
-LEVEL = logger._core.min_level
 DEBUG = 10
 
 @dataclass
@@ -53,7 +52,7 @@ class ReorderModifier(Modifier):
         self._debug_info = {}
 
         # cached indices
-        if self.config.path:
+        if self.config.path and os.path.isfile(self.config.path):
             self._indices = torch.load(self.config.path)
             self._initialized = True
             return
@@ -62,7 +61,7 @@ class ReorderModifier(Modifier):
         for layer_idx, layer_struct in enumerate(model_struct.layer_structs):
             self._reorder_hooks[layer_idx] = {}
             self._act_stats[layer_idx] = {}
-            if LEVEL <= DEBUG:
+            if logger._core.min_level <= DEBUG:
                 self._debug_info[layer_idx] = {}
             
             # get modules
@@ -147,9 +146,10 @@ class ReorderModifier(Modifier):
             v_idx = compute_head_index(idx, num_heads, num_repeats)
 
             # capture signatures for debug
-            sig_o = attn.o_proj.weight[:, idx[0]].sum().item()
-            sig_v = attn.v_proj.weight[v_idx[0], :].sum().item()
-            self._debug_info[layer_idx]["o_proj"] = (sig_o, sig_v)
+            if layer_idx in self._debug_info:
+                sig_o = attn.o_proj.weight[:, idx[0]].sum().item()
+                sig_v = attn.v_proj.weight[v_idx[0], :].sum().item()
+                self._debug_info[layer_idx]["o_proj"] = (sig_o, sig_v)
 
             # apply reorder
             reorder(attn.o_proj, idx, attn.v_proj, v_idx)
@@ -170,9 +170,10 @@ class ReorderModifier(Modifier):
             idx = self._indices[key]
 
             # capture signatures for debug
-            sig_down = ffn.down_proj.weight[:, idx[0]].sum().item()
-            sig_up = ffn.up_projs[0].weight[idx[0], :].sum().item()
-            self._debug_info[layer_idx]["down_proj"] = (sig_down, sig_up)
+            if layer_idx in self._debug_info:
+                sig_down = ffn.down_proj.weight[:, idx[0]].sum().item()
+                sig_up = ffn.up_projs[0].weight[idx[0], :].sum().item()
+                self._debug_info[layer_idx]["down_proj"] = (sig_down, sig_up)
 
             # apply reorder
             reorder(ffn.down_proj, idx, ffn.up_projs)

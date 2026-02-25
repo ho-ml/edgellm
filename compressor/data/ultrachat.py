@@ -2,7 +2,7 @@ from typing import *
 from datasets import load_dataset
 from compressor.data.base import CalibDataset
 
-__all__ = ["UltraChatDataset"]
+__all__ = ["UltraChatCalibDataset"]
 
 DEFAULT_CHAT_TEMPLATE = (
     "{% for message in messages %}\n"
@@ -17,29 +17,28 @@ DEFAULT_CHAT_TEMPLATE = (
     "{{ '<|assistant|>' }}\n{% endif %}\n{% endfor %}"
 )
 
-@CalibDataset.register("ultrachat")
-class UltraChatDataset(CalibDataset):
+
+class _UltraChatBase:
     """
-    HuggingFace UltraChat 200k dataset
+    UltraChat common logic
     """
     data_name_or_path = "HuggingFaceH4/ultrachat_200k"
     data_config = None
-    split = "train_sft"
     text_key = "text"
 
     def __init__(
-        self, 
-        tokenizer, 
-        num_samples, 
-        seq_length, 
-        max_length=-1, 
-        min_length=-1, 
+        self,
+        tokenizer,
+        num_samples,
+        seq_length,
+        max_length=-1,
+        min_length=-1,
         seed=42
     ):
         # set chat template if not exists
         if getattr(tokenizer, "chat_template", None) is None:
             tokenizer.chat_template = DEFAULT_CHAT_TEMPLATE
-        self.tokenizer = tokenizer  
+        self.tokenizer = tokenizer
 
         super().__init__(
             tokenizer=tokenizer,
@@ -54,7 +53,6 @@ class UltraChatDataset(CalibDataset):
         """
         Load and preprocess ultrachat dataset
         """
-        # load dataset
         dataset = load_dataset(
             self.data_name_or_path,
             self.data_config,
@@ -65,7 +63,7 @@ class UltraChatDataset(CalibDataset):
 
         def apply_chat_template(sample):
             messages = sample["messages"]
-            
+
             # add system message if not exists
             if messages[0]["role"] != "system":
                 messages.insert(0, {"role": "system", "content": ""})
@@ -79,10 +77,14 @@ class UltraChatDataset(CalibDataset):
 
             return {"text": text}
 
-        # store tokenizer reference for map function
         dataset = dataset.map(apply_chat_template)
-
-        # get only text columns
         dataset = dataset.select_columns(["text"])
 
         return dataset
+
+
+@CalibDataset.register("ultrachat")
+class UltraChatCalibDataset(_UltraChatBase, CalibDataset):
+    split = "train_sft"
+
+

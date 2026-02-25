@@ -1,3 +1,4 @@
+import os
 import torch
 import contextlib
 import torch.nn as nn
@@ -74,7 +75,7 @@ class RotateModifier(Modifier):
                 )
 
         # get rotation matrix
-        if self.config.path:
+        if self.config.path and os.path.isfile(self.config.path):
             cached = torch.load(self.config.path)
             self._rotation = cached["rotation"]
             self._head_rotation = cached.get("head_rotation")
