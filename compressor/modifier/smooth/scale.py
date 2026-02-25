@@ -5,16 +5,16 @@ __all__ = [
     "compute_scale", "scale_up", "scale_down",
 ]
 
-def compute_scale(amax: torch.Tensor, wmax: torch.Tensor, alpha: float = 0.5):
+def compute_scale(amax: torch.Tensor, wmax: torch.Tensor, alpha: float = 0.5, beta: float = 0.5):
     """
     Compute smooth scale factor
 
-    s = amax ^ alpha / wmax ^ (1 - alpha)
+    s = amax ^ alpha / wmax ^ beta
     """
     amax = amax.clamp(min=1e-8)
     wmax = wmax.clamp(min=1e-8)
 
-    scale = (amax ** alpha) / (wmax ** (1 - alpha))
+    scale = (amax ** alpha) / (wmax ** beta)
     return scale.clamp(min=1e-8)
 
 def scale_up(param: nn.Parameter, scale: torch.Tensor, dim: int = 0):

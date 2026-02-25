@@ -32,8 +32,13 @@ class SmoothConfig(ModifierConfig):
     smooth_ffn: bool = True     # o proj -> gate, up projs
     smooth_down: bool = True    # up, gate projs -> down proj
 
-    # alpha settings
-    alpha: float = 0.5
+    # proj params
+    proj_alpha: float = 0.5
+    proj_beta: float = 0.5
+
+    # attn params
+    attn_alpha: float = 0.5
+    attn_beta: float = 0.5
 
 class SmoothModifier(Modifier):
     """
@@ -166,7 +171,7 @@ class SmoothModifier(Modifier):
                 q_amax = get_act_max(q_stats, attn.config, is_kv=False, gqa=True)
 
                 # compute scale at KV dimension
-                scale = (k_amax ** self.config.alpha) / (q_amax ** (1 - self.config.alpha))
+                scale = (k_amax ** self.config.attn_alpha) / (q_amax ** self.config.attn_beta)
                 self._scales[key] = scale.cpu()
 
             # apply smoothing
@@ -186,7 +191,7 @@ class SmoothModifier(Modifier):
                     wmax = torch.maximum(wmax, get_weight_max(p.weight))
                 
                 # copmute scale
-                scale = compute_scale(amax, wmax, self.config.alpha)
+                scale = compute_scale(amax, wmax, self.config.proj_alpha, self.config.proj_beta)
                 self._scales[key] = scale.cpu()
             
             # apply smoothing
@@ -204,7 +209,7 @@ class SmoothModifier(Modifier):
                 wmax = get_weight_max(attn.o_proj.weight, dim=0, attn_config=attn.config, reduce_gqa=True)
 
                 # compute scale
-                scale = compute_scale(amax, wmax, self.config.alpha)
+                scale = compute_scale(amax, wmax, self.config.proj_alpha, self.config.proj_beta)
                 self._scales[key] = scale.cpu()
 
             # apply smoothing
@@ -224,7 +229,7 @@ class SmoothModifier(Modifier):
                     wmax = torch.maximum(wmax, get_weight_max(p.weight))
 
                 # compute scale
-                scale = compute_scale(amax, wmax, self.config.alpha)
+                scale = compute_scale(amax, wmax, self.config.proj_alpha, self.config.proj_beta)
                 self._scales[key] = scale.cpu()
             
             # apply smoothing
@@ -239,7 +244,7 @@ class SmoothModifier(Modifier):
             if key not in self._scales:
                 amax = get_act_max(layer_stats.get("down_proj"))
                 wmax = get_weight_max(ffn.down_proj.weight)
-                scale = compute_scale(amax, wmax, self.config.alpha)
+                scale = compute_scale(amax, wmax, self.config.proj_alpha, self.config.proj_beta)
                 self._scales[key] = scale.cpu()
 
             # apply smoothing
