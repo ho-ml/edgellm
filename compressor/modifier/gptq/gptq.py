@@ -39,20 +39,36 @@ def gptq(
     H = H[perm][:, perm]
     inv_perm = torch.argsort(perm)
 
-    # compute inverse Hessian in-place
-    try:
-        damp = perc_damp * torch.mean(torch.diag(H))
-        diag = torch.arange(H.shape[0], device=H.device)
-        H[diag, diag] += damp
+    # move inverse Hessian on CPU to avoid CUDA illegal memory access
+    gpu_device = H.device
+    H_cpu = H.cpu().to(dtype=torch.float64)
+    del H
 
-        H = torch.linalg.cholesky(H)
-        H = torch.cholesky_inverse(H)
-        H = torch.linalg.cholesky(H, upper=True)
-        Hinv = H
+    # add damping
+    H_diag = H_cpu.diagonal()
+    H_diag_mean = H_diag.mean()
+    H_diag += perc_damp * H_diag_mean
 
-    except torch._C._LinAlgError:
-        logger.warning(f"[{name}] Cholesky failed! Falling back to RTN.")
-        Hinv = H = torch.eye(num_cols, dtype=H.dtype, device=H.device)
+    # compute inverse Hessian
+    stable_inv, num_tries = False, 0
+    while (not stable_inv) and num_tries < 200:
+        num_tries += 1
+        try:
+            Hinv = torch.linalg.cholesky(H_cpu)
+            Hinv = torch.cholesky_inverse(Hinv)
+            Hinv = torch.linalg.cholesky(Hinv, upper=True)
+        except RuntimeError:
+            H_diag += (perc_damp * 0.1) * H_diag_mean
+            continue
+        stable_inv = True
+
+    # move result back to GPU as float32
+    Hinv = Hinv.to(device=gpu_device, dtype=torch.float32)
+
+    # sanity check & free memory
+    if Hinv.isinf().any() or Hinv.isnan().any():
+        logger.error(f"{name}: Inverse of Hessian matrix contains Inf or NaN.")
+    del H_cpu, H_diag, H_diag_mean, num_tries
 
     # initialize loss
     losses = torch.zeros(num_rows, device=W.device)

@@ -28,7 +28,7 @@ class RTNModifier(Modifier):
         """
         self._model_struct = model_struct
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def apply(
         self, layer_struct: DecoderStruct, _dataloader: CalibDataLoader
     ):

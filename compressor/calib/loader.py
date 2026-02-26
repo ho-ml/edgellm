@@ -45,7 +45,7 @@ class CalibDataLoader:
         # build dataset
         self.dataset = config.build_dataset(tokenizer)
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def initialize(self):
         """
         Prepare first layer's input
@@ -111,7 +111,7 @@ class CalibDataLoader:
                 
             yield args
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def calibrate(
         self, layer_struct: DecoderStruct, layer_hooks: Dict[str, RemovableHandle]
     ):
@@ -132,7 +132,7 @@ class CalibDataLoader:
         
         del kwargs
         
-    @torch.inference_mode()
+    @torch.no_grad()
     def propagate(self, layer_struct: DecoderStruct):
         """
         Update input args & kwargs of layer

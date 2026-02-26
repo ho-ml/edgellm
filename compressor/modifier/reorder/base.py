@@ -95,7 +95,7 @@ class ReorderModifier(Modifier):
         handle = self.register_hook(module, hook_fn, "forward")
         self._reorder_hooks[layer_idx][name] = handle
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def apply(self, layer_struct: DecoderStruct, dataloader: CalibDataLoader):
         """
         Apply channel reordering to a single decoder layer
@@ -179,7 +179,8 @@ class ReorderModifier(Modifier):
             reorder(ffn.down_proj, idx, ffn.up_projs)
 
         # free memory
-        del self._act_stats[layer_idx]
+        if layer_idx in self._act_stats:
+            del self._act_stats[layer_idx]
     
     def finalize(self):
         """
