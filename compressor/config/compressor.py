@@ -61,16 +61,18 @@ class CompressorConfig:
         # determine paths from the transform_path
         if self.transform_path:
             if self.rotate is not None and not self.rotate.path:
-                self.rotate.path = os.path.join(self.transform_path, "rotate")
+                self.rotate.path = os.path.join(self.transform_path, "rotate.pt")
             if self.reorder is not None and not self.reorder.path:
-                self.reorder.path = os.path.join(self.transform_path, "reorder")
+                self.reorder.path = os.path.join(self.transform_path, "reorder.pt")
             if self.smooth is not None and not self.smooth.path:
-                self.smooth.path = os.path.join(self.transform_path, "smooth")
+                self.smooth.path = os.path.join(self.transform_path, "smooth.pt")
 
         # determine paths from the quant_path
         if self.quant_path:
             if self.weight_quant is not None and not self.weight_quant.path:
-                self.weight_quant.path = os.path.join(self.quant_path, "weight")
+                self.weight_quant.path = os.path.join(self.quant_path, "weight.pt")
+            if self.act_quant is not None and not self.act_quant.path:
+                self.act_quant.path = os.path.join(self.quant_path, "act.pt")
         
         # unify `skips` types to list
         if self.act_quant is not None and isinstance(self.act_quant.skips, str):

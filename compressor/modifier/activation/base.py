@@ -18,6 +18,7 @@ class ActivationQuantConfig:
     """
     Configuration for activation quantization
     """
+    path: str = ""
     input_args: Optional[QuantArgs] = field(default=None)
     output_args: Optional[QuantArgs] = field(default=None)
     skips: List[str] = field(default_factory=list)
@@ -38,7 +39,7 @@ class ActivationQuantModifier(Modifier):
         self._model_struct = model_struct
         self._initialized = True
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def apply(
         self, layer_struct: DecoderStruct, _dataloader: CalibDataLoader
     ):

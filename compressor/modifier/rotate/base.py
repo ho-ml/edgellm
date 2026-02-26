@@ -93,7 +93,7 @@ class RotateModifier(Modifier):
         # apply rotation to whole model
         self._rotate()
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def _rotate(self):
         """
         Apply rotation to whole model

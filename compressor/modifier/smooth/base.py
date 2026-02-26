@@ -121,7 +121,7 @@ class SmoothModifier(Modifier):
         handle = self.register_hook(module, hook_fn, "forward")
         self._smooth_hooks[layer_idx][name] = handle
 
-    @torch.inference_mode()
+    @torch.no_grad()
     def apply(
         self, layer_struct: DecoderStruct, dataloader: CalibDataLoader
     ):

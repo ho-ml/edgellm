@@ -12,4 +12,4 @@ CONFIG="${CONFIG:-examples/configs/qoq.yaml}"
 MODEL="${MODEL:-meta-llama/Llama-3.2-1B}"
 
 # run
-TORCH_USE_CUDA_DSA=1 CUDA_LAUNCH_BLOCKING=1 python -m compressor.compress --config "$CONFIG" --model "$MODEL" "$@"
+python -m compressor.compress --config "$CONFIG" --model "$MODEL" "$@"
