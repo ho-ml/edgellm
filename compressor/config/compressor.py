@@ -29,7 +29,6 @@ class CompressorConfig:
     smooth: Optional[SmoothConfig] = field(default=None)
 
     # config for quantization
-    quant_path: str = ""
     quant: Optional[QuantConfig] = field(default=None)
     weight_quant: Optional[WeightQuantConfig] = field(default=None)
     act_quant: Optional[ActivationQuantConfig] = field(default=None)
@@ -67,13 +66,6 @@ class CompressorConfig:
             if self.smooth is not None and not self.smooth.path:
                 self.smooth.path = os.path.join(self.transform_path, "smooth.pt")
 
-        # determine paths from the quant_path
-        if self.quant_path:
-            if self.weight_quant is not None and not self.weight_quant.path:
-                self.weight_quant.path = os.path.join(self.quant_path, "weight.pt")
-            if self.act_quant is not None and not self.act_quant.path:
-                self.act_quant.path = os.path.join(self.quant_path, "act.pt")
-        
         # unify `skips` types to list
         if self.act_quant is not None and isinstance(self.act_quant.skips, str):
             self.act_quant.skips = [self.act_quant.skips]
@@ -82,8 +74,7 @@ class CompressorConfig:
         for path in [
             self.rotate.path if self.rotate is not None else "",
             self.reorder.path if self.reorder is not None else "",
-            self.smooth.path if self.smooth is not None else "",
-            self.weight_quant.path if self.weight_quant is not None else "",
+            self.smooth.path if self.smooth is not None else ""
         ]:
             if path:
                 parent = os.path.dirname(path)
@@ -160,13 +151,11 @@ class CompressorConfig:
 
         # quant config
         quant_dict = config.get("quant", None)
-        quant_path = ""
         quant_config = None
         weight_quant_config = None
         act_quant_config = None
 
         if quant_dict:
-            quant_path = quant_dict.get("path", "")
             quant_config = QuantConfig.from_dict(quant_dict)
 
             # weight quantization config
@@ -182,6 +171,7 @@ class CompressorConfig:
 
             # activation quantization config
             if quant_config.input is not None or quant_config.output is not None:
+                skips = []
                 output_dict = quant_dict.get("output", None)
                 if output_dict is not None:
                     output_mod = output_dict.get("mod", {})
@@ -190,7 +180,7 @@ class CompressorConfig:
                 act_quant_config = ActivationQuantConfig(
                     input_args=quant_config.input,
                     output_args=quant_config.output,
-                    skips=skips if skips else []
+                    skips=skips
                 )
 
         return cls(
@@ -199,7 +189,6 @@ class CompressorConfig:
             rotate=rotate_config,
             reorder=reorder_config,
             smooth=smooth_config,
-            quant_path=quant_path,
             quant=quant_config,
             weight_quant=weight_quant_config,
             act_quant=act_quant_config

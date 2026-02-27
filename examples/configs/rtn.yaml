@@ -7,7 +7,6 @@ calib:
   seed: 42
 
 quant:
-  path: ""
   weight:
     args:
       bits: 4

@@ -16,8 +16,7 @@ class WeightQuantConfig:
     Configuration for weight quantization
     """
     args: QuantArgs = field(default_factory=QuantArgs)
-
-    path: str = ""
+    
     method: str = "gptq"    # "gptq", "rtn", "awq"
     block_size: int = 128
     perc_damp: float = 0.01

@@ -18,7 +18,6 @@ class ActivationQuantConfig:
     """
     Configuration for activation quantization
     """
-    path: str = ""
     input_args: Optional[QuantArgs] = field(default=None)
     output_args: Optional[QuantArgs] = field(default=None)
     skips: List[str] = field(default_factory=list)
