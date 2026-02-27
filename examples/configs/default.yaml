@@ -32,7 +32,6 @@ transform:
     attn_beta: 0
 
 quant:
-  path: "output/qoq/quant"
   weight:
     args:
       bits: 4

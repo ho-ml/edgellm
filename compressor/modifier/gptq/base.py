@@ -146,14 +146,7 @@ class GPTQModifier(Modifier):
     def finalize(self):
         """
         Finalize after all layers processed
-
-        1. save quantized params
-        2. reset states
         """
-        # save params
-        if self.config.path and self._qparams:
-            torch.save(self._qparams, self.config.path)
-
         # reset states
         self._model_struct = None
         self._gptq_hooks = {}

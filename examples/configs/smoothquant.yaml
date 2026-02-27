@@ -21,7 +21,6 @@ transform:
     attn_beta: 0
 
 quant:
-  path: ""
   weight:
     args:
       bits: 8
