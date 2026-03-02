@@ -8,7 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
 # defaults
-CONFIG="${CONFIG:-examples/configs/qoq.yaml}"
+CONFIG="${CONFIG:-examples/configs/w4a8.yaml}"
 MODEL="${MODEL:-meta-llama/Llama-3.2-1B}"
 
 # run

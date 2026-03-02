@@ -11,6 +11,7 @@ from compressor.modifier.smooth import SmoothConfig, SmoothModifier
 from compressor.modifier.reorder import ReorderConfig, ReorderModifier
 from compressor.modifier.weight import WeightQuantConfig, WeightQuantModifier
 from compressor.modifier.activation import ActivationQuantConfig, ActivationQuantModifier
+from compressor.config.pack import PackConfig
 
 __all__ = ["CompressorConfig"]
 
@@ -32,6 +33,9 @@ class CompressorConfig:
     quant: Optional[QuantConfig] = field(default=None)
     weight_quant: Optional[WeightQuantConfig] = field(default=None)
     act_quant: Optional[ActivationQuantConfig] = field(default=None)
+
+    # config for pack
+    pack: Optional[PackConfig] = field(default=None)
 
     def __post_init__(self):
         """
@@ -183,6 +187,12 @@ class CompressorConfig:
                     skips=skips
                 )
 
+        # packer config
+        pack_config = None
+        pack_dict = config.get("pack", None)
+        if pack_dict is not None:
+            pack_config = PackConfig.from_dict(pack_dict)
+
         return cls(
             calib=calib_config,
             transform_path=transform_path,
@@ -191,5 +201,6 @@ class CompressorConfig:
             smooth=smooth_config,
             quant=quant_config,
             weight_quant=weight_quant_config,
-            act_quant=act_quant_config
+            act_quant=act_quant_config,
+            pack=pack_config,
         )

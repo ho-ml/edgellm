@@ -26,4 +26,8 @@ eval:
     num_samples: 128
     seq_length: 2048
   compare_baseline: true
-  output_path: results.json
+  output_path: "output/w4a16/results.json"
+
+pack:
+  enabled: true
+  output_dir: "output/w4a16"

@@ -21,12 +21,14 @@ class RTNModifier(Modifier):
 
     # runtime state
     _model_struct: Optional[LLMStruct] = PrivateAttr(default=None)
+    _qparams: Dict[str, torch.Tensor] = PrivateAttr(default_factory=dict)
 
     def initialize(self, model_struct: LLMStruct):
         """
         Initialize RTN modifier
         """
         self._model_struct = model_struct
+        self._qparams = {}
 
     @torch.no_grad()
     def apply(
@@ -35,9 +37,10 @@ class RTNModifier(Modifier):
         """
         Apply RTN quantization to a decoder layer
         """
+        layer_idx = layer_struct.layer_idx
         linears = self.get_linear_modules(layer_struct)
 
-        for _, module in linears.items():
+        for name, module in linears.items():
             W = module.weight.clone().to(torch.float32)
             ori_dtype = module.weight.dtype
             args = self.config.args
@@ -50,7 +53,12 @@ class RTNModifier(Modifier):
                 # fake quantize normalized weight
                 qweight = fake_quantize(x_norm, scale_1, zero_1, args)
                 qweight = restore_weight(qweight, scale_0, level0_col).to(ori_dtype)
-                
+
+                # store qparams
+                self._qparams[f"layer.{layer_idx}.{name}.scale_0"] = scale_0.to(ori_dtype).cpu()
+                self._qparams[f"layer.{layer_idx}.{name}.scale_1"] = scale_1.to(ori_dtype).cpu()
+                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero_1.to(ori_dtype).cpu()
+
             else:
                 # get observer and compute scales
                 observer_cls = Observer.get(args.observer)
@@ -61,13 +69,24 @@ class RTNModifier(Modifier):
                 qweight = fake_quantize(W, scale, zero, args)
                 qweight = qweight.to(ori_dtype)
 
+                # store qparams
+                self._qparams[f"layer.{layer_idx}.{name}.scale"] = scale.to(ori_dtype).cpu()
+                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero.to(ori_dtype).cpu()
+
             module.weight.data = qweight
+
+    def get_qparams(self):
+        """
+        Return collected quantization parameters
+        """
+        return dict(self._qparams)
 
     def finalize(self):
         """
         Finalize after all layers processed
         """
         self._model_struct = None
+        self._qparams = {}
 
     def debug(self, layer_idx: int):
         """

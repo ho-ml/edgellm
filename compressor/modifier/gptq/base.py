@@ -124,15 +124,15 @@ class GPTQModifier(Modifier):
                 # restore float weight using level-0 scale
                 restored = restore_weight(qweight, scale_0, level0_col)
                 module.weight.data = restored.to(qweight.dtype)
-                self._qparams[f"layer.{layer_idx}.{name}.scale_0"] = scale_0
-                self._qparams[f"layer.{layer_idx}.{name}.scale_1"] = scale_1
-                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero
-            
+                self._qparams[f"layer.{layer_idx}.{name}.scale_0"] = scale_0.cpu()
+                self._qparams[f"layer.{layer_idx}.{name}.scale_1"] = scale_1.cpu()
+                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero.cpu()
+
             else:
                 loss, qweight, scale, zero = result
                 module.weight.data = qweight
-                self._qparams[f"layer.{layer_idx}.{name}.scale"] = scale
-                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero
+                self._qparams[f"layer.{layer_idx}.{name}.scale"] = scale.cpu()
+                self._qparams[f"layer.{layer_idx}.{name}.zero"] = zero.cpu()
 
             # save result
             self._losses[layer_idx][name] = loss
@@ -143,6 +143,12 @@ class GPTQModifier(Modifier):
         if layer_idx in self._num_samples:
             del self._num_samples[layer_idx]
     
+    def get_qparams(self):
+        """
+        Return collected quantization parameters
+        """
+        return dict(self._qparams)
+
     def finalize(self):
         """
         Finalize after all layers processed

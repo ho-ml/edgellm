@@ -7,7 +7,7 @@ calib:
   seed: 42
 
 transform:
-  path: ""
+  path: "output/w8a8/transform"
   smooth:
     enabled: true
     smooth_attn: true
@@ -47,4 +47,8 @@ eval:
     num_samples: 128
     seq_length: 2048
   compare_baseline: true
-  output_path: "output/qoq/results.json"
+  output_path: "output/w8a8/results.json"
+
+pack:
+  enabled: true
+  output_dir: "output/w8a8"
