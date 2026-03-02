@@ -8,6 +8,7 @@ from compressor.config import CompressorConfig
 from compressor.calib import CalibDataLoader
 from compressor.nn import LLMStruct, DecoderStruct
 from compressor.modifier import Modifier
+from compressor.packer import Packer
 from compressor.utils import (
     get_best_device, get_execution_device, log_weight, log_memory
 )
@@ -100,10 +101,26 @@ class Compressor:
             layer_struct.module = layer_struct.module.to(self.offload_device)
             self.clear()
 
+        # collect qparams before finalize
+        qparams = {}
+        for modifier in self.modifiers:
+            if hasattr(modifier, "get_qparams"):
+                qparams.update(modifier.get_qparams())
+
         # finalize all modifiers
         for modifier in self.modifiers:
             modifier.finalize()
         self.clear()
+
+        # pack compressed model
+        if self.config.pack is not None and self.config.pack.enabled:
+            packer = Packer(
+                config=self.config.pack,
+                quant_config=self.config.quant,
+                model_struct=model_struct,
+                qparams=qparams
+            )
+            packer.run()
 
         return model_struct.model
     

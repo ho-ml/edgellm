@@ -253,7 +253,8 @@ class SmoothModifier(Modifier):
             smooth_quant(ffn.up_proj, ffn.down_proj, scale)
 
         # free memory
-        del self._act_stats[layer_idx]
+        if layer_idx in self._act_stats:
+            del self._act_stats[layer_idx]
 
     def finalize(self):
         """

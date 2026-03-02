@@ -21,14 +21,16 @@ dependencies = [
     "sentencepiece>=0.1.99",
     "protobuf>=4.25.0",
     "loguru>=0.7.3",
+    "safetensors>=0.4.0",
 ]
 
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["compressor"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["compressor*"]
 
 [project.optional-dependencies]
 flash-attn = [

@@ -70,6 +70,14 @@ class WeightQuantModifier(Modifier):
         """
         self._modifier.apply(layer_struct, dataloader)
 
+    def get_qparams(self):
+        """
+        Get quantized parameters after quantization
+        """
+        if self._modifier is not None and hasattr(self._modifier, "get_qparams"):
+            return self._modifier.get_qparams()
+        return {}
+
     def finalize(self):
         """
         Finalize by cleaning up the internal modifier
