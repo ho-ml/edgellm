@@ -35,6 +35,9 @@ class Packer:
         """
         logger.info(f"Packing model in {self.format} format")
 
+        # resolve dtype
+        dtype = getattr(torch, self.config.dtype)
+
         # get state dicts of compressed model
         args = self.quant_config.weight
         state_dict = build_state_dict(
@@ -43,6 +46,7 @@ class Packer:
             format_type=self.format,
             args=args,
             mma=self.config.mma,
+            dtype=dtype,
         )
 
         # build metadata

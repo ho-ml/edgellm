@@ -173,6 +173,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Compress a LLM")
     parser.add_argument("--config", required=True, help="Path to yaml config file")
     parser.add_argument("--model",  required=True, help="Model ID or local path")
+    parser.add_argument("--dtype",  default="float16", choices=["float16", "bfloat16"], help="Model dtype")
     parser.add_argument("--debug",  action="store_true", help="Enable debug logging")
     args = parser.parse_args()
 
@@ -185,9 +186,10 @@ if __name__ == "__main__":
     eval_config = EvalConfig.from_yaml(args.config)
 
     # load models
+    torch_dtype = getattr(torch, args.dtype)
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        torch_dtype=torch.float16,
+        torch_dtype=torch_dtype,
         device_map="cpu",
         trust_remote_code=True,
     )
