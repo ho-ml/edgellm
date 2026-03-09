@@ -5,7 +5,7 @@ from loguru import logger
 from compressor.nn.struct import LLMStruct
 from compressor.config.quant import QuantConfig
 from compressor.config.pack import PackConfig
-from compressor.utils.pack import infer_format
+from compressor.packer.format import infer_format
 from compressor.packer.pack import build_state_dict, build_metadata, save_checkpoint
 
 __all__ = ["Packer"]
@@ -45,7 +45,6 @@ class Packer:
             qparams=self.qparams,
             format_type=self.format,
             args=args,
-            mma=self.config.mma,
             dtype=dtype,
         )
 

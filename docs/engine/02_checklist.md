@@ -17,30 +17,51 @@
 - [x] `compressor/packer/convert.py`: `scale.half()`, `zero.half()` → `.to(dtype)` (lines 35-36, 모든 format 함수)
 - [x] **검증**: 작은 모델을 FP16과 BF16으로 각각 압축, 출력 텐서 dtype 확인
 
-### 0B. Marlin 호환 Weight Packing (W4A16)
+### 0B. 엔진-포맷 아키텍처 리팩터링 + Marlin 호환 Weight Packing (W4A16)
 
-- [ ] `compressor/utils/pack.py`: 기존 `pack_int4`, `unpack_int4` 유지하고 추가:
-  - `pack_marlin_w4a16(qweight, size_k, size_n)` → int32 Marlin 타일 포맷
-  - `marlin_permute_scales(scales, size_k, size_n, group_size)` → permuted scales
-  - `marlin_permute_zeros(zeros, ...)` → permuted zeros (asymmetric용)
-  - `get_scale_perms()` → permutation 인덱스 (vLLM `marlin_utils.py` L293-313에서 포팅)
-- [ ] `compressor/packer/convert.py`: `linear_w4a16()` 수정:
-  - Marlin packing 호출하도록 변경 (기존 `pack_int4` 대체)
-  - 반환: `{"qweight": int32_marlin, "scales": permuted, "zeros": permuted}`
-- [ ] `compressor/config/pack.py`: `PackConfig`에 `format: str = "marlin"` 필드 추가
-- [ ] `compressor/utils/pack.py`: `apply_mma()` stub 제거 또는 Marlin packing으로 대체
-- [ ] **검증**: 패킹된 qweight shape = `[size_k // 16, size_n * 16 // 8]` (int32)
+#### 0B-1. format 모듈 구조 생성
+
+- [x] `compressor/packer/format/__init__.py` 생성:
+  - `FormatHandler` protocol 정의 (`convert_linear` 메서드)
+  - `_REGISTRY` dict: `{"w4a16": W4A16Format, "w4a8": W4A8Format, "w8a8": W8A8Format}`
+  - `resolve(format_type: str) -> FormatHandler` 함수
+- [x] `compressor/packer/format/w4a8.py` 생성: `W4A8Format` stub (향후 엔진 확정 시 구현)
+- [x] `compressor/packer/format/w8a8.py` 생성: `W8A8Format` stub (향후 엔진 확정 시 구현)
+
+#### 0B-2. W4A16 Marlin 포맷 구현
+
+- [x] `compressor/packer/format/w4a16.py` 생성: `W4A16Format` 클래스
+  - `convert_linear(weight, qparams, qparams_key, args, dtype)` → `{"qweight": int32, "scales": permuted, "zeros": permuted}`
+  - `pack_weight(q, size_k, size_n)` → int32 Marlin 16×16 타일 포맷
+  - `permute_scales(scales, size_k, size_n, group_size)` → Marlin permuted scales
+  - `permute_zeros(zeros, ...)` → Marlin permuted zeros (asymmetric용)
+  - `_get_scale_perms()` → permutation 인덱스 (vLLM `marlin_utils.py` L293-313에서 포팅)
+
+#### 0B-3. 기존 코드 제거 및 연동
+
+- [x] `compressor/packer/convert.py` **삭제** (format 모듈로 대체)
+- [x] `compressor/packer/base.py` 수정: `infer_format` import를 `format` 모듈로 변경, `mma` 인자 제거
+- [x] `compressor/packer/pack.py` 수정: `build_state_dict()`에서 `format.resolve()` 사용, `mma` 파라미터 제거
+- [x] `compressor/utils/pack.py` **삭제** (`infer_format`은 format 모듈로 이동, `apply_mma` 제거)
+- [x] `compressor/utils/__init__.py`: `from .pack import *` 제거
+- [x] `compressor/packer/__init__.py`: `from .convert import *` 제거, `from .format import *` 추가
+
+#### 0B-4. 검증
+
+- [x] W4A16 Marlin 패킹: qweight shape = `[size_k // 16, size_n * 2]` (int32)
+- [x] Marlin permuted scales shape 검증
+- [x] `format.resolve("w4a16")` → `W4A16Format` 인스턴스 반환 확인
 
 ### 0C. Asymmetric Quantization 지원
 
-- [ ] `compressor/packer/convert.py`: `linear_w4a16()`에서 `args.symmetric == False`일 때 zeros를 Marlin permutation 적용하여 저장
-- [ ] `compressor/packer/pack.py`: `build_metadata()`에 `"symmetric": bool` 추가
-- [ ] **검증**: asymmetric W4A16 양자화 + Marlin packing이 유효한 출력 생성
+- [x] `compressor/packer/format/w4a16.py`: `W4A16Format.convert_linear()`에서 `args.symmetric == False`일 때 `permute_zeros()` 적용하여 저장
+- [x] `compressor/packer/pack.py`: `build_metadata()`에 `"symmetric": bool` 추가, `"mma"` 필드 제거
+- [x] **검증**: asymmetric W4A16 양자화 + Marlin packing이 유효한 출력 생성
 
 ### 0D. Phase 0 통합 검증
 
-- [ ] 압축 모델 출력 SafeTensors의 텐서 shape 확인 (qweight, scales, zeros)
-- [ ] config.json metadata 완전성 확인 (format, dtype, symmetric)
+- [x] 압축 모델 출력 SafeTensors의 텐서 shape 확인 (qweight, scales, zeros)
+- [x] config.json metadata 완전성 확인 (format, dtype, symmetric)
 
 ---
 
@@ -330,5 +351,5 @@
 |------|------|------|
 | `LLMConfig` | `compressor/nn/struct/llm.py` | 모델 아키텍처 정보 참조 |
 | `QuantArgs` | `compressor/config/quant.py` | 양자화 파라미터 (bits, symmetric, group_shapes) |
-| `pack_int4` / `unpack_int4` | `compressor/utils/pack.py` | W4A8, W8A8용 기존 패킹 유지 |
-| `infer_format` | `compressor/utils/pack.py` | 포맷 추론 |
+| `infer_format` / `resolve` | `compressor/packer/format/__init__.py` | 양자화 스킴 추론 / 포맷 핸들러 해석 |
+| `W4A16Format` | `compressor/packer/format/w4a16.py` | Marlin 호환 W4A16 패킹 |
