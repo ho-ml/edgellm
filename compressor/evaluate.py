@@ -162,6 +162,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate a LLM")
     parser.add_argument("--config", required=True, help="Path to yaml config file")
     parser.add_argument("--model",  required=True, help="Model ID or local path")
+    parser.add_argument("--dtype",  default="float16", choices=["float16", "bfloat16"], help="Model dtype")
     args = parser.parse_args()
 
     # get config file
@@ -171,9 +172,10 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # get model & tokenizer
+    torch_dtype = getattr(torch, args.dtype)
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        torch_dtype=torch.float16,
+        torch_dtype=torch_dtype,
         device_map="cpu",
         trust_remote_code=True,
     )

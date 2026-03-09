@@ -6,10 +6,9 @@ from pathlib import Path
 from safetensors.torch import save_file
 from compressor.nn import LLMStruct, DecoderStruct
 from compressor.config.quant import QuantArgs, QuantConfig
-from compressor.packer.convert import convert_linear
-from compressor.utils import apply_mma
 from compressor.config.pack import PackConfig
-    
+from compressor.packer.format import FormatHandler
+
 __all__ = ["build_state_dict", "build_metadata", "save_checkpoint"]
 
 def _get_full_path(rname: str, layer_struct: DecoderStruct):
@@ -28,29 +27,34 @@ def build_state_dict(
     qparams: Dict[str, torch.Tensor],
     format_type: str,
     args: QuantArgs,
-    mma: bool = False
+    dtype: torch.dtype = torch.float16,
 ):
     """
     Build the complete packed state dict for the model
     """
     state_dict = {}
 
-    # embedding (fp16)
+    # load format handler
+    handler_cls = FormatHandler.get(format_type)
+    handler = handler_cls(args)
+
+    # embed layer
     if model_struct.embed_tokens is not None:
         embed_key = f"{model_struct.backbone_rname}.{model_struct.embed_tokens_rname}.weight"
-        state_dict[embed_key] = model_struct.embed_tokens.weight.half().cpu()
+        state_dict[embed_key] = model_struct.embed_tokens.weight.to(dtype).cpu()
 
+    # layer-wise build
     for layer_idx, layer_struct in model_struct.iter_layers():
         prefix = f"{model_struct.backbone_rname}.{model_struct.layers_rname}.{layer_idx}"
 
-        # normalization layers (fp16)
+        # normalization layers
         if layer_struct.input_layernorm is not None:
             key = f"{prefix}.{layer_struct.input_layernorm_rname}.weight"
-            state_dict[key] = layer_struct.input_layernorm.weight.half().cpu()
+            state_dict[key] = layer_struct.input_layernorm.weight.to(dtype).cpu()
         if layer_struct.post_attention_layernorm is not None:
             key = f"{prefix}.{layer_struct.post_attention_layernorm_rname}.weight"
-            state_dict[key] = layer_struct.post_attention_layernorm.weight.half().cpu()
-
+            state_dict[key] = layer_struct.post_attention_layernorm.weight.to(dtype).cpu()
+        
         # quantized linear layers
         linears = layer_struct.get_linear_modules()
         for rname, module in linears.items():
@@ -59,26 +63,24 @@ def build_state_dict(
             path = _get_full_path(rname, layer_struct)
             full_prefix = f"{prefix}.{path}"
 
-            # convert linear to quantized linear
-            qlinear = convert_linear(
-                module.weight, qparams, qparams_key, format_type, args
+            # convert linear to qlinear
+            qlinear = handler.convert_linear(
+                module.weight, qparams, qparams_key, dtype=dtype
             )
 
             # save to state dict
             for suffix, tensor in qlinear.items():
                 full_key = f"{full_prefix}.{suffix}"
-                if mma:
-                    tensor = apply_mma(tensor, format_type, "weight")
                 state_dict[full_key] = tensor
-    
-    # final normalization (fp16)
+
+    # final normalization
     if model_struct.norm is not None:
         norm_key = f"{model_struct.backbone_rname}.{model_struct.norm_rname}.weight"
-        state_dict[norm_key] = model_struct.norm.weight.half().cpu()
+        state_dict[norm_key] = model_struct.norm.weight.to(dtype).cpu()
 
-    # lm head (fp16)
+    # lm head
     if model_struct.lm_head is not None:
-        state_dict[f"{model_struct.lm_head_rname}.weight"] = model_struct.lm_head.weight.half().cpu()
+        state_dict[f"{model_struct.lm_head_rname}.weight"] = model_struct.lm_head.weight.to(dtype).cpu()
 
     return state_dict
 
@@ -101,10 +103,11 @@ def build_metadata(
         quant_meta["input"] = quant_config.input.bits
     if quant_config.output is not None:
         quant_meta["output"] = quant_config.output.bits
-        
+
     # meta data
     meta = {
         "format": format_type,
+        "dtype": pack_config.dtype,
     
         "architecture": {
             "hidden_size": model_config.hidden_size,
@@ -116,15 +119,14 @@ def build_metadata(
         },
 
         "quantization": quant_meta,
+        "symmetric": quant_config.weight.symmetric,
 
         "engine": {
             "target_sm": 89,        # RTX 4060
-            "mma": pack_config.mma
         }
     }
 
     return meta
-
 
 def _split_shard(
     state_dict: Dict[str, torch.Tensor],

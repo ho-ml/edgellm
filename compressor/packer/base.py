@@ -5,7 +5,7 @@ from loguru import logger
 from compressor.nn.struct import LLMStruct
 from compressor.config.quant import QuantConfig
 from compressor.config.pack import PackConfig
-from compressor.utils.pack import infer_format
+from compressor.packer.format import infer_format
 from compressor.packer.pack import build_state_dict, build_metadata, save_checkpoint
 
 __all__ = ["Packer"]
@@ -35,6 +35,9 @@ class Packer:
         """
         logger.info(f"Packing model in {self.format} format")
 
+        # resolve dtype
+        dtype = getattr(torch, self.config.dtype)
+
         # get state dicts of compressed model
         args = self.quant_config.weight
         state_dict = build_state_dict(
@@ -42,7 +45,7 @@ class Packer:
             qparams=self.qparams,
             format_type=self.format,
             args=args,
-            mma=self.config.mma,
+            dtype=dtype,
         )
 
         # build metadata
